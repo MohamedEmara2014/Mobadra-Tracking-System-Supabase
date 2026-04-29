@@ -14,7 +14,6 @@ def init_connection():
 
 supabase = init_connection()
 
-# وظيفة جلب البيانات بدون "Cache" لضمان التحديث الواقعي
 def get_data_fresh():
     try:
         res = supabase.table("project_data").select("*, projects(name)").execute()
@@ -28,8 +27,6 @@ if "auth" not in st.session_state:
     st.session_state.auth = False
     st.session_state.role = None
     st.session_state.user_section = None
-if "current_tab" not in st.session_state:
-    st.session_state.current_tab = None
 
 if not st.session_state.auth:
     st.set_page_config(page_title="تسجيل الدخول", layout="centered")
@@ -57,25 +54,20 @@ else:
     # --- أ. واجهة المدير العام ---
     if st.session_state.role == "admin":
         st.title("📊 لوحة تحكم المدير العام")
-        
-        # استخدام التبويبات كـ "Selector" لفرض التحديث عند التغيير
-        tab_titles = all_sections + ["📋 الجدول المجمع الشامل"]
-        tabs = st.tabs(tab_titles)
-        
-        # جلب البيانات (ستعمل هذه الدالة عند كل تغيير في التبويب)
         full_df = get_data_fresh()
         
         if not full_df.empty:
             if 'updated_at' in full_df.columns:
                 full_df['updated_at_formatted'] = pd.to_datetime(full_df['updated_at']).dt.tz_convert('Asia/Riyadh').dt.strftime('%Y-%m-%d %I:%M %p')
             
+            tabs = st.tabs(all_sections + ["📋 الجدول المجمع الشامل"])
+            
             for i, sec_name in enumerate(all_sections):
                 with tabs[i]:
                     sec_data = full_df[full_df["section_name"] == sec_name].copy().sort_values("project_id")
-                    
                     if not sec_data.empty:
                         last_up = sec_data['updated_at_formatted'].iloc[0] if 'updated_at_formatted' in sec_data.columns else "غير مسجل"
-                        st.markdown(f"### 📑 بيانات قسم {sec_name} <span style='font-size: 0.7em; color: #1E88E5;'> (آخر تحديث استلمه النظام: {last_up})</span>", unsafe_allow_html=True)
+                        st.markdown(f"### 📑 بيانات قسم {sec_name} <span style='font-size: 0.7em; color: #1E88E5;'> (آخر تحديث: {last_up})</span>", unsafe_allow_html=True)
                         
                         sec_data["المشروع"] = sec_data["projects"].apply(lambda x: x["name"])
                         
@@ -93,25 +85,46 @@ else:
                             updates = [{"id": int(sec_data.iloc[idx]["id"]), "section_name": sec_name, "action_note": str(edited_adm.iloc[idx].get("توجيه المدير", ""))} for idx in range(len(edited_adm))]
                             try:
                                 supabase.table("project_data").upsert(updates).execute()
-                                st.success(f"✅ تم إرسال التوجيهات لقسم {sec_name}")
-                                st.toast("تم الحفظ بنجاح")
+                                st.success(f"✅ تم إرسال التوجيهات لقسم {sec_name} بنجاح")
+                                st.toast("تم الحفظ")
                             except Exception as e:
                                 st.error(f"خطأ: {e}")
 
             with tabs[-1]:
-                st.subheader("📋 التقرير المجمع الشامل")
+                st.subheader("📋 التقرير المجمع الشامل لجميع الأقسام")
                 p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
-                summary_data = []
+                
+                summary_rows = []
                 for p in p_names:
                     row = {"المشروع": p}
                     for s in all_sections:
                         sub = full_df[(full_df["projects"].apply(lambda x: x["name"]) == p) & (full_df["section_name"] == s)]
                         if not sub.empty:
-                            c1_name = "وارد" if s == "الحسابات" else "إنجاز"
-                            row[f"{s}: {c1_name}"] = sub.iloc[0]["col1"]
-                            row[f"{s}: الحالة/الرصيد"] = sub.iloc[0]["col3"] if s != "الحسابات" else sub.iloc[0]["col5"]
-                    summary_data.append(row)
-                st.dataframe(pd.DataFrame(summary_data), hide_index=True, use_container_width=True)
+                            if s == "الحسابات":
+                                row[f"{s}: وارد العملاء"] = sub.iloc[0]["col1"]
+                                row[f"{s}: صادر العملاء"] = sub.iloc[0]["col2"]
+                                row[f"{s}: الرصيد"] = sub.iloc[0]["col5"]
+                            else:
+                                row[f"{s}: ما تم إنجازه"] = sub.iloc[0]["col1"]
+                                row[f"{s}: الحالة"] = sub.iloc[0]["col3"]
+                            row[f"{s}: ملاحظات"] = sub.iloc[0]["comment"]
+                    summary_rows.append(row)
+                
+                final_summary_df = pd.DataFrame(summary_rows)
+                st.dataframe(final_summary_df, hide_index=True, use_container_width=True)
+                
+                # إمكانية تحميل ملف الإكسيل المجمع
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                    final_summary_df.to_excel(writer, index=False, sheet_name='التقرير المجمع')
+                
+                st.download_button(
+                    label="📥 تحميل التقرير المجمع الشامل (Excel)",
+                    data=buffer.getvalue(),
+                    file_name=f"التقرير_المجمع_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary"
+                )
 
     # --- ب. واجهة الأقسام ---
     else:
@@ -135,19 +148,16 @@ else:
             
             edited_staff = st.data_editor(display_df, column_config={"المشروع": st.column_config.TextColumn(disabled=True), "🚩 توجيه المدير": st.column_config.TextColumn(disabled=True), "حالة المشروع": st.column_config.SelectboxColumn("حالة المشروع", options=status_options) if sec != "الحسابات" else None}, hide_index=True, use_container_width=True, key="staff_editor")
 
-            if st.button("🚀 حفظ البيانات وإرسالها للمدير", type="primary", use_container_width=True):
+            if st.button("🚀 حفظ البيانات النهائية", type="primary", use_container_width=True):
                 updates = []
-                current_now = datetime.now().isoformat()
+                now = datetime.now().isoformat()
                 for idx in range(len(edited_staff)):
                     row = edited_staff.iloc[idx]
                     payload = {
-                        "id": int(db_df.iloc[idx]["id"]),
-                        "section_name": sec,
-                        "col1": str(row.get(map_dict["col1"], "")),
-                        "col2": str(row.get(map_dict["col2"], "")),
-                        "col3": str(row.get(map_dict["col3"], "")),
-                        "comment": str(row.get(map_dict["comment"], "")),
-                        "updated_at": current_now
+                        "id": int(db_df.iloc[idx]["id"]), "section_name": sec,
+                        "col1": str(row.get(map_dict["col1"], "")), "col2": str(row.get(map_dict["col2"], "")),
+                        "col3": str(row.get(map_dict["col3"], "")), "comment": str(row.get(map_dict["comment"], "")),
+                        "updated_at": now
                     }
                     if sec == "الحسابات":
                         payload.update({"col4": str(row.get("صادر التنفيذ", "")), "col5": str(row.get("الرصيد", ""))})
@@ -156,9 +166,10 @@ else:
                 try:
                     supabase.table("project_data").upsert(updates).execute()
                     st.balloons()
-                    st.success(f"🎊 تم حفظ بيانات قسم ({sec}) بنجاح!")
+                    st.success(f"✅ تم حفظ بيانات قسم {sec} بنجاح!")
+                    st.toast("تم التحديث")
                 except Exception as e:
-                    st.error(f"خطأ في الحفظ: {e}")
+                    st.error(f"خطأ: {e}")
 
     if st.sidebar.button("🚪 تسجيل الخروج"):
         st.session_state.auth = False
