@@ -85,16 +85,14 @@ else:
                             updates = [{"id": int(sec_data.iloc[idx]["id"]), "section_name": sec_name, "action_note": str(edited_adm.iloc[idx].get("توجيه المدير", ""))} for idx in range(len(edited_adm))]
                             try:
                                 supabase.table("project_data").upsert(updates).execute()
-                                st.success(f"✅ تم حفظ توجيهات قسم {sec_name}")
+                                st.success(f"✅ تم حفظ توجيهات قسم {sec_name} بنجاح")
                                 st.toast("تم الحفظ بنجاح")
                             except Exception as e:
                                 st.error(f"خطأ في الحفظ: {e}")
 
-            # --- التقرير المجمع الشامل (الأعمدة الكاملة) ---
             with tabs[-1]:
                 st.subheader("📋 التقرير المجمع التفصيلي (كافة البيانات)")
                 p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
-                
                 summary_rows = []
                 for p in p_names:
                     row = {"المشروع": p}
@@ -112,7 +110,6 @@ else:
                                 row[f"{s}: ما تم إنجازه"] = target["col1"]
                                 row[f"{s}: المعوقات"] = target["col2"]
                                 row[f"{s}: الحالة"] = target["col3"]
-                            
                             row[f"{s}: ملاحظات القسم"] = target["comment"]
                             row[f"{s}: توجيه المدير"] = target["action_note"]
                     summary_rows.append(row)
@@ -120,27 +117,62 @@ else:
                 final_summary_df = pd.DataFrame(summary_rows)
                 st.dataframe(final_summary_df, hide_index=True, use_container_width=True)
                 
-                # زر التحميل
                 buffer = io.BytesIO()
                 final_summary_df.to_excel(buffer, index=False)
-                st.download_button(
-                    label="📥 تحميل التقرير المجمع الشامل (Excel)",
-                    data=buffer.getvalue(),
-                    file_name=f"التقرير_المجمع_الشامل_{datetime.now().strftime('%d-%m-%Y')}.xlsx",
-                    mime="application/vnd.ms-excel",
-                    type="primary"
-                )
+                st.download_button(label="📥 تحميل التقرير المجمع الشامل (Excel)", data=buffer.getvalue(), file_name=f"التقرير_المجمع_الشامل_{datetime.now().strftime('%d-%m-%Y')}.xlsx", mime="application/vnd.ms-excel", type="primary")
 
-    # --- ب. واجهة الأقسام ---
+    # --- ب. واجهة الأقسام (تم إضافة الرفع والتحميل هنا) ---
     else:
         sec = st.session_state.user_section
         st.title(f"🏗️ إدارة بيانات قسم: {sec}")
+        
         res = supabase.table("project_data").select("*, projects(name)").eq("section_name", sec).order("project_id").execute()
         
         if res.data:
             db_df = pd.DataFrame(res.data)
             db_df["المشروع"] = db_df["projects"].apply(lambda x: x["name"])
             
+            # --- ميزة الرفع والتحميل ---
+            col_exp1, col_exp2 = st.columns(2)
+            with col_exp1:
+                # 1. زر تحميل النموذج الفارغ (يحتوي على أسماء المشاريع والـ ID المخفي)
+                template_df = db_df[["id", "المشروع"]].copy()
+                if sec == "الحسابات":
+                    template_df["وارد العملاء"] = ""; template_df["صادر العملاء"] = ""; template_df["وارد التنفيذ"] = ""; template_df["صادر التنفيذ"] = ""; template_df["الرصيد"] = ""; template_df["ملاحظات القسم"] = ""
+                else:
+                    template_df["ما تم انجازه"] = ""; template_df["المعوقات والمشاكل"] = ""; template_df["حالة المشروع"] = ""; template_df["ملاحظات القسم"] = ""
+                
+                tmp_buffer = io.BytesIO()
+                template_df.to_excel(tmp_buffer, index=False)
+                st.download_button("📥 تحميل نموذج الإكسيل لملئه", data=tmp_buffer.getvalue(), file_name=f"نموذج_{sec}.xlsx", mime="application/vnd.ms-excel")
+
+            with col_exp2:
+                # 2. زر رفع الملف المكتمل
+                uploaded_file = st.file_uploader("📂 رفع الملف بعد ملئه لتحديث الجدول", type=["xlsx"])
+                if uploaded_file:
+                    try:
+                        up_df = pd.read_excel(uploaded_file)
+                        st.success("✅ تم قراءة الملف بنجاح، يرجى مراجعة الجدول أدناه ثم الضغط على حفظ.")
+                        # دمج البيانات المرفوعة مع البيانات الأصلية بناءً على ID
+                        for index, row in up_df.iterrows():
+                            idx_in_db = db_df.index[db_df['id'] == row['id']].tolist()
+                            if idx_in_db:
+                                i = idx_in_db[0]
+                                if sec == "الحسابات":
+                                    db_df.at[i, "col1"] = str(row.get("وارد العملاء", ""))
+                                    db_df.at[i, "col2"] = str(row.get("صادر العملاء", ""))
+                                    db_df.at[i, "col3"] = str(row.get("وارد التنفيذ", ""))
+                                    db_df.at[i, "col4"] = str(row.get("صادر التنفيذ", ""))
+                                    db_df.at[i, "col5"] = str(row.get("الرصيد", ""))
+                                else:
+                                    db_df.at[i, "col1"] = str(row.get("ما تم انجازه", ""))
+                                    db_df.at[i, "col2"] = str(row.get("المعوقات والمشاكل", ""))
+                                    db_df.at[i, "col3"] = str(row.get("حالة المشروع", ""))
+                                db_df.at[i, "comment"] = str(row.get("ملاحظات القسم", ""))
+                    except Exception as e:
+                        st.error(f"خطأ في معالجة الملف: {e}")
+
+            # عرض الجدول (سواء كان فارغاً أو بعد الرفع)
             if sec == "الحسابات":
                 map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه المدير"}
                 cols = ["المشروع", "🚩 توجيه المدير", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد", "ملاحظات القسم"]
@@ -170,9 +202,7 @@ else:
                 
                 try:
                     supabase.table("project_data").upsert(updates).execute()
-                    st.balloons()
-                    st.success(f"✅ تم حفظ بيانات قسم {sec} بنجاح!")
-                    st.toast("تم التحديث")
+                    st.balloons(); st.success(f"✅ تم حفظ بيانات قسم {sec} بنجاح!"); st.toast("تم التحديث")
                 except Exception as e:
                     st.error(f"خطأ في الحفظ: {e}")
 
