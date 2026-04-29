@@ -50,23 +50,22 @@ else:
     st.set_page_config(page_title="نظام المبادرة", layout="wide")
     all_sections = ["التنفيذ", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز"]
 
-    # --- أ. واجهة المدير العام ---
     if st.session_state.role == "admin":
-        st.title("📊 لوحة تحكم المدير العام (38 مشروع)")
+        st.title("📊 لوحة تحكم المدير العام")
         full_df = get_data_fresh()
         
         if not full_df.empty:
             tabs = st.tabs(all_sections + ["📋 الجدول المجمع الشامل"])
             
-            # حل مشكلة بيانات الأقسام للمدير
             for i, sec_name in enumerate(all_sections):
                 with tabs[i]:
-                    st.subheader(f"بيانات وتوجيهات قسم: {sec_name}")
+                    st.subheader(f"توجيهات قسم: {sec_name}")
                     sec_data = full_df[full_df["section_name"] == sec_name].copy().sort_values("project_id")
                     
                     if not sec_data.empty:
                         sec_data["المشروع"] = sec_data["projects"].apply(lambda x: x["name"])
                         
+                        # اختيار الأعمدة بناءً على القسم
                         if sec_name == "الحسابات":
                             map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد", "comment": "ملاحظات القسم", "action_note": "توجيه المدير"}
                             cols = ["المشروع", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد", "ملاحظات القسم", "توجيه المدير"]
@@ -82,30 +81,34 @@ else:
                             hide_index=True, key=f"adm_ed_key_{sec_name}"
                         )
                         
-                        # حل مشكلة APIError: نرسل فقط الـ ID والـ action_note
-                        if st.button(f"💾 اعتماد توجيهات {sec_name}", key=f"btn_save_adm_{sec_name}"):
+                        if st.button(f"💾 اعتماد وإرسال توجيهات {sec_name}", key=f"btn_save_adm_{sec_name}"):
                             updates = []
                             for idx in range(len(edited_adm)):
                                 row_id = int(sec_data.iloc[idx]["id"])
                                 note_val = str(edited_adm.iloc[idx].get("توجيه المدير", ""))
-                                updates.append({"id": row_id, "action_note": note_val})
+                                # الحل هنا: نرسل الـ id والـ section_name معاً لتجنب خطأ الـ Null
+                                updates.append({
+                                    "id": row_id, 
+                                    "section_name": sec_name,
+                                    "action_note": note_val
+                                })
                             
                             try:
                                 supabase.table("project_data").upsert(updates).execute()
-                                st.success(f"✅ تم حفظ توجيهات {sec_name} بنجاح!")
-                                st.rerun()
+                                # رسالة النجاح التي طلبتها
+                                st.success(f"✅ تم إرسال التوجيهات إلى قسم ({sec_name}) بنجاح، وسيظهر لهم الآن في جداولهم.")
+                                st.balloons() # احتفال بسيط بالنجاح
                             except Exception as e:
-                                st.error(f"فشل الحفظ: تأكد من أن البيانات صحيحة. {e}")
+                                st.error(f"فشل الحفظ: {e}")
                     else:
                         st.info(f"لا توجد بيانات حالية لقسم {sec_name}")
 
-            # حل مشكلة الجدول المجمع (يظهر الآن بشكل صحيح)
             with tabs[-1]:
-                st.subheader("📋 ملخص كافة الأقسام لكافة المشروعات")
-                all_projects = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
-                
+                # منطق الجدول المجمع
+                st.subheader("📋 ملخص كافة الأقسام")
+                p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
                 summary_data = []
-                for p in all_projects:
+                for p in p_names:
                     row = {"المشروع": p}
                     for s in all_sections:
                         sub = full_df[(full_df["projects"].apply(lambda x: x["name"]) == p) & (full_df["section_name"] == s)]
@@ -113,21 +116,14 @@ else:
                             row[f"{s}: إنجاز/وارد"] = sub.iloc[0]["col1"]
                             row[f"{s}: حالة/رصيد"] = sub.iloc[0]["col3"] if s != "الحسابات" else sub.iloc[0]["col5"]
                     summary_data.append(row)
-                
-                final_summary_df = pd.DataFrame(summary_data)
-                st.dataframe(final_summary_df, hide_index=True, use_container_width=True)
-                
-                # تحميل الإكسيل المجمع
-                excel_buf = io.BytesIO()
-                final_summary_df.to_excel(excel_buf, index=False)
-                st.download_button("📥 تحميل التقرير المجمع (Excel)", excel_buf.getvalue(), "المجمع_الشامل.xlsx", type="primary")
+                st.dataframe(pd.DataFrame(summary_data), hide_index=True, use_container_width=True)
 
-    # --- ب. واجهة الأقسام (Staff) ---
+    # --- واجهة الأقسام (Staff) ---
     else:
         sec = st.session_state.user_section
-        st.title(f"🏗️ إدارة بيانات قسم: {sec}")
-        
+        st.title(f"🏗️ قسم: {sec}")
         res = supabase.table("project_data").select("*, projects(name)").eq("section_name", sec).order("project_id").execute()
+        
         if res.data:
             db_df = pd.DataFrame(res.data)
             db_df["المشروع"] = db_df["projects"].apply(lambda x: x["name"])
@@ -141,36 +137,24 @@ else:
 
             display_df = db_df.rename(columns=map_dict)[cols]
 
-            # ميزة التحميل والرفع
-            st.markdown("### 📑 تحديث البيانات")
-            c1, c2 = st.columns(2)
-            with c1:
-                # تحميل الملف كنموذج
-                tmp_buf = io.BytesIO()
-                display_df.to_excel(tmp_buf, index=False)
-                st.download_button("📥 تحميل نموذج القسم (Excel)", tmp_buf.getvalue(), f"نموذج_{sec}.xlsx", use_container_width=True)
-            with c2:
-                up_file = st.file_uploader("📤 ارفع الملف بعد التعديل:", type=["xlsx"])
-                if up_file:
-                    up_df = pd.read_excel(up_file)
-                    for c in display_df.columns:
-                        if c in up_df.columns and c not in ["المشروع", "🚩 توجيه المدير"]:
-                            display_df[c] = up_df[c].values[:len(display_df)]
-                    st.success("✅ تم استيراد البيانات، راجع الجدول ثم اضغط حفظ.")
+            # رفع الإكسيل
+            uploaded = st.file_uploader("📤 تحديث عبر رفع ملف إكسيل:", type=["xlsx"])
+            if uploaded:
+                up_df = pd.read_excel(uploaded)
+                for c in display_df.columns:
+                    if c in up_df.columns and c not in ["المشروع", "🚩 توجيه المدير"]:
+                        display_df[c] = up_df[c].values[:len(display_df)]
+                st.success("✅ تم تحديث الجدول من الملف.")
 
-            # الجدول
-            edited_staff = st.data_editor(
-                display_df,
-                column_config={"المشروع": st.column_config.TextColumn(disabled=True), "🚩 توجيه المدير": st.column_config.TextColumn(disabled=True)},
-                hide_index=True, use_container_width=True, key=f"staff_editor_final"
-            )
+            edited_staff = st.data_editor(display_df, column_config={"المشروع": st.column_config.TextColumn(disabled=True), "🚩 توجيه المدير": st.column_config.TextColumn(disabled=True)}, hide_index=True, use_container_width=True, key="staff_editor")
 
-            if st.button("🚀 حفظ البيانات في قاعدة البيانات", type="primary"):
+            if st.button("🚀 حفظ البيانات", type="primary"):
                 updates = []
                 for idx in range(len(edited_staff)):
                     row = edited_staff.iloc[idx]
                     payload = {
                         "id": int(db_df.iloc[idx]["id"]),
+                        "section_name": sec, # أضفنا هذا الحقل لتجنب الخطأ
                         "col1": str(row.get(map_dict["col1"], "")),
                         "col2": str(row.get(map_dict["col2"], "")),
                         "col3": str(row.get(map_dict["col3"], "")),
@@ -182,10 +166,10 @@ else:
                 
                 try:
                     supabase.table("project_data").upsert(updates).execute()
-                    st.success("✅ تم تحديث البيانات بنجاح!")
+                    st.success("✅ تم حفظ وتحديث بيانات القسم بنجاح!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"خطأ أثناء الحفظ: {e}")
+                    st.error(f"خطأ في الحفظ: {e}")
 
     if st.sidebar.button("🚪 تسجيل الخروج"):
         st.session_state.auth = False
