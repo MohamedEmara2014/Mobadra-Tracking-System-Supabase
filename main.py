@@ -101,78 +101,64 @@ else:
                         if not sub.empty:
                             target = sub.iloc[0]
                             if s == "الحسابات":
-                                row[f"{s}: وارد العملاء"] = target["col1"]
-                                row[f"{s}: صادر العملاء"] = target["col2"]
-                                row[f"{s}: وارد التنفيذ"] = target["col3"]
-                                row[f"{s}: صادر التنفيذ"] = target["col4"]
+                                row[f"{s}: وارد العملاء"] = target["col1"]; row[f"{s}: صادر العملاء"] = target["col2"]
+                                row[f"{s}: وارد التنفيذ"] = target["col3"]; row[f"{s}: صادر التنفيذ"] = target["col4"]
                                 row[f"{s}: الرصيد"] = target["col5"]
                             else:
-                                row[f"{s}: ما تم إنجازه"] = target["col1"]
-                                row[f"{s}: المعوقات"] = target["col2"]
+                                row[f"{s}: ما تم إنجازه"] = target["col1"]; row[f"{s}: المعوقات"] = target["col2"]
                                 row[f"{s}: الحالة"] = target["col3"]
-                            row[f"{s}: ملاحظات القسم"] = target["comment"]
-                            row[f"{s}: توجيه المدير"] = target["action_note"]
+                            row[f"{s}: ملاحظات القسم"] = target["comment"]; row[f"{s}: توجيه المدير"] = target["action_note"]
                     summary_rows.append(row)
                 
                 final_summary_df = pd.DataFrame(summary_rows)
                 st.dataframe(final_summary_df, hide_index=True, use_container_width=True)
-                
                 buffer = io.BytesIO()
                 final_summary_df.to_excel(buffer, index=False)
                 st.download_button(label="📥 تحميل التقرير المجمع الشامل (Excel)", data=buffer.getvalue(), file_name=f"التقرير_المجمع_الشامل_{datetime.now().strftime('%d-%m-%Y')}.xlsx", mime="application/vnd.ms-excel", type="primary")
 
-    # --- ب. واجهة الأقسام (تم إضافة الرفع والتحميل هنا) ---
+    # --- ب. واجهة الأقسام ---
     else:
         sec = st.session_state.user_section
         st.title(f"🏗️ إدارة بيانات قسم: {sec}")
-        
         res = supabase.table("project_data").select("*, projects(name)").eq("section_name", sec).order("project_id").execute()
         
         if res.data:
             db_df = pd.DataFrame(res.data)
             db_df["المشروع"] = db_df["projects"].apply(lambda x: x["name"])
             
-            # --- ميزة الرفع والتحميل ---
             col_exp1, col_exp2 = st.columns(2)
             with col_exp1:
-                # 1. زر تحميل النموذج الفارغ (يحتوي على أسماء المشاريع والـ ID المخفي)
                 template_df = db_df[["id", "المشروع"]].copy()
                 if sec == "الحسابات":
                     template_df["وارد العملاء"] = ""; template_df["صادر العملاء"] = ""; template_df["وارد التنفيذ"] = ""; template_df["صادر التنفيذ"] = ""; template_df["الرصيد"] = ""; template_df["ملاحظات القسم"] = ""
                 else:
                     template_df["ما تم انجازه"] = ""; template_df["المعوقات والمشاكل"] = ""; template_df["حالة المشروع"] = ""; template_df["ملاحظات القسم"] = ""
-                
                 tmp_buffer = io.BytesIO()
                 template_df.to_excel(tmp_buffer, index=False)
                 st.download_button("📥 تحميل نموذج الإكسيل لملئه", data=tmp_buffer.getvalue(), file_name=f"نموذج_{sec}.xlsx", mime="application/vnd.ms-excel")
 
             with col_exp2:
-                # 2. زر رفع الملف المكتمل
                 uploaded_file = st.file_uploader("📂 رفع الملف بعد ملئه لتحديث الجدول", type=["xlsx"])
                 if uploaded_file:
                     try:
-                        up_df = pd.read_excel(uploaded_file)
+                        # تم إضافة .fillna('') هنا لمنع ظهور nan
+                        up_df = pd.read_excel(uploaded_file).fillna('')
                         st.success("✅ تم قراءة الملف بنجاح، يرجى مراجعة الجدول أدناه ثم الضغط على حفظ.")
-                        # دمج البيانات المرفوعة مع البيانات الأصلية بناءً على ID
                         for index, row in up_df.iterrows():
-                            idx_in_db = db_df.index[db_df['id'] == row['id']].tolist()
-                            if idx_in_db:
-                                i = idx_in_db[0]
+                            idx_list = db_df.index[db_df['id'] == row['id']].tolist()
+                            if idx_list:
+                                i = idx_list[0]
                                 if sec == "الحسابات":
-                                    db_df.at[i, "col1"] = str(row.get("وارد العملاء", ""))
-                                    db_df.at[i, "col2"] = str(row.get("صادر العملاء", ""))
-                                    db_df.at[i, "col3"] = str(row.get("وارد التنفيذ", ""))
-                                    db_df.at[i, "col4"] = str(row.get("صادر التنفيذ", ""))
+                                    db_df.at[i, "col1"] = str(row.get("وارد العملاء", "")); db_df.at[i, "col2"] = str(row.get("صادر العملاء", ""))
+                                    db_df.at[i, "col3"] = str(row.get("وارد التنفيذ", "")); db_df.at[i, "col4"] = str(row.get("صادر التنفيذ", ""))
                                     db_df.at[i, "col5"] = str(row.get("الرصيد", ""))
                                 else:
-                                    db_df.at[i, "col1"] = str(row.get("ما تم انجازه", ""))
-                                    db_df.at[i, "col2"] = str(row.get("المعوقات والمشاكل", ""))
+                                    db_df.at[i, "col1"] = str(row.get("ما تم انجازه", "")); db_df.at[i, "col2"] = str(row.get("المعوقات والمشاكل", ""))
                                     db_df.at[i, "col3"] = str(row.get("حالة المشروع", ""))
                                 db_df.at[i, "comment"] = str(row.get("ملاحظات القسم", ""))
                     except Exception as e:
                         st.error(f"خطأ في معالجة الملف: {e}")
 
-            # عرض الجدول (سواء كان فارغاً أو بعد الرفع)
             if sec == "الحسابات":
                 map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه المدير"}
                 cols = ["المشروع", "🚩 توجيه المدير", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد", "ملاحظات القسم"]
@@ -182,7 +168,6 @@ else:
 
             display_df = db_df.rename(columns=map_dict)[cols]
             status_options = ["🟢 مكتمل", "🔵 قيد التنفيذ", "🟠 بانتظار مستندات", "🔴 متوقف / معلق"]
-            
             edited_staff = st.data_editor(display_df, column_config={"المشروع": st.column_config.TextColumn(disabled=True), "🚩 توجيه المدير": st.column_config.TextColumn(disabled=True), "حالة المشروع": st.column_config.SelectboxColumn("حالة المشروع", options=status_options) if sec != "الحسابات" else None}, hide_index=True, use_container_width=True, key="staff_editor")
 
             if st.button("🚀 حفظ البيانات النهائية", type="primary", use_container_width=True):
@@ -190,16 +175,9 @@ else:
                 now = datetime.now().isoformat()
                 for idx in range(len(edited_staff)):
                     row = edited_staff.iloc[idx]
-                    payload = {
-                        "id": int(db_df.iloc[idx]["id"]), "section_name": sec,
-                        "col1": str(row.get(map_dict["col1"], "")), "col2": str(row.get(map_dict["col2"], "")),
-                        "col3": str(row.get(map_dict["col3"], "")), "comment": str(row.get(map_dict["comment"], "")),
-                        "updated_at": now
-                    }
-                    if sec == "الحسابات":
-                        payload.update({"col4": str(row.get("صادر التنفيذ", "")), "col5": str(row.get("الرصيد", ""))})
+                    payload = {"id": int(db_df.iloc[idx]["id"]), "section_name": sec, "col1": str(row.get(map_dict["col1"], "")), "col2": str(row.get(map_dict["col2"], "")), "col3": str(row.get(map_dict["col3"], "")), "comment": str(row.get(map_dict["comment"], "")), "updated_at": now}
+                    if sec == "الحسابات": payload.update({"col4": str(row.get("صادر التنفيذ", "")), "col5": str(row.get("الرصيد", ""))})
                     updates.append(payload)
-                
                 try:
                     supabase.table("project_data").upsert(updates).execute()
                     st.balloons(); st.success(f"✅ تم حفظ بيانات قسم {sec} بنجاح!"); st.toast("تم التحديث")
