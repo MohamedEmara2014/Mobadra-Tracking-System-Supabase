@@ -84,8 +84,9 @@ else:
                             except Exception as e:
                                 st.error(f"فشل الحفظ: {e}")
 
+            # --- التحديث: الجدول المجمع وزر التحميل ---
             with tabs[-1]:
-                st.subheader("📋 ملخص المبادرة الشامل")
+                st.subheader("📋 ملخص المبادرة الشامل لكافة الأقسام")
                 p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
                 summary_data = []
                 for p in p_names:
@@ -98,7 +99,23 @@ else:
                             row[f"{s}: {c1_name}"] = sub.iloc[0]["col1"]
                             row[f"{s}: {st_name}"] = sub.iloc[0]["col3"] if s != "الحسابات" else sub.iloc[0]["col5"]
                     summary_data.append(row)
-                st.dataframe(pd.DataFrame(summary_data), hide_index=True, use_container_width=True)
+                
+                final_summary_df = pd.DataFrame(summary_data)
+                
+                # عرض الجدول
+                st.dataframe(final_summary_df, hide_index=True, use_container_width=True)
+                
+                # زر تحميل الجدول المجمع كملف إكسيل
+                excel_buffer = io.BytesIO()
+                final_summary_df.to_excel(excel_buffer, index=False)
+                st.download_button(
+                    label="📥 تحميل التقرير المجمع كاملاً (Excel)",
+                    data=excel_buffer.getvalue(),
+                    file_name="التقرير_المجمع_للمبادرة.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary",
+                    use_container_width=True
+                )
 
     # --- ب. واجهة الأقسام (Staff) ---
     else:
@@ -119,7 +136,6 @@ else:
 
             display_df = db_df.rename(columns=map_dict)[cols]
 
-            # رفع وتحميل الإكسيل
             c1, c2 = st.columns(2)
             with c1:
                 tmp_buf = io.BytesIO()
@@ -134,7 +150,6 @@ else:
                             display_df[c] = up_df[c].values[:len(display_df)]
                     st.success("✅ تم تحديث الجدول من الملف.")
 
-            # محرر البيانات مع القائمة المنسدلة للحالة
             status_options = ["🟢 مكتمل", "🔵 قيد التنفيذ", "🟠 بانتظار مستندات", "🔴 متوقف / معلق"]
             
             edited_staff = st.data_editor(
