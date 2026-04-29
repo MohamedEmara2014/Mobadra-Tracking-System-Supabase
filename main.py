@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client
 import io
-from openpyxl import Workbook
 
 # --- 1. الإعدادات والاتصال ---
 SUPABASE_URL = "https://rsyyhhpjnzkgnhzuekij.supabase.co"
@@ -14,8 +13,8 @@ def init_connection():
 
 supabase = init_connection()
 
-# دالة لجلب البيانات بشكل طازج عند الحاجة
-def get_all_data():
+# دالة جلب البيانات مع إلغاء التخزين المؤقت لضمان حداثة البيانات
+def get_fresh_data():
     res = supabase.table("project_data").select("*, projects(name)").execute()
     return pd.DataFrame(res.data) if res.data else pd.DataFrame()
 
@@ -34,12 +33,9 @@ if not st.session_state.auth:
         if submit:
             passwords = {
                 "Admin38": "admin",
-                "Exec123": "التنفيذ",
-                "Tech123": "المكتب الفني",
-                "Lic123": "التراخيص",
-                "Acc123": "الحسابات",
-                "Legal123": "الشئون القانونية",
-                "Install123": "أقساط الجهاز"
+                "Exec123": "التنفيذ", "Tech123": "المكتب الفني",
+                "Lic123": "التراخيص", "Acc123": "الحسابات",
+                "Legal123": "الشئون القانونية", "Install123": "أقساط الجهاز"
             }
             if pwd in passwords:
                 val = passwords[pwd]
@@ -58,7 +54,9 @@ else:
         
         if mode == "التقرير المجمع الشامل":
             st.title("📊 التقرير المجمع الشامل")
-            full_df = get_all_data()
+            
+            # جلب البيانات
+            full_df = get_fresh_data()
             
             if not full_df.empty:
                 p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]))
@@ -66,10 +64,10 @@ else:
                 
                 for i, sec in enumerate(all_sections):
                     with tabs[i]:
-                        # تصفية البيانات لكل قسم مع الحفاظ على الفهرس (Index) الصحيح للتحديث
                         sec_df = full_df[full_df["section_name"] == sec].copy().sort_values("project_id")
                         sec_df["المشروع"] = sec_df["projects"].apply(lambda x: x["name"])
                         
+                        # تحديد الأعمدة
                         if sec == "الحسابات":
                             m_cols = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد", "comment": "ملاحظات", "action_note": "توجيه المدير"}
                             disp = ["المشروع", "col1", "col2", "col3", "col4", "col5", "comment", "action_note"]
@@ -77,22 +75,34 @@ else:
                             m_cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات", "action_note": "توجيه المدير"}
                             disp = ["المشروع", "col1", "col2", "col3", "comment", "action_note"]
                         
-                        # تمكين التعديل فقط على خانة التوجيه لضمان الدقة
-                        adm_config = {k: st.column_config.TextColumn(v, disabled=True) for k, v in m_cols.items()}
-                        adm_config["action_note"] = st.column_config.TextColumn("توجيه المدير", disabled=False)
+                        # إعدادات الأعمدة: الكل معطل ماعدا التوجيه
+                        column_config = {k: st.column_config.TextColumn(v, disabled=True) for k, v in m_cols.items()}
+                        column_config["action_note"] = st.column_config.TextColumn("📝 اكتب توجيه المدير هنا", disabled=False)
                         
-                        adm_edit = st.data_editor(sec_df[disp], column_config=adm_config, hide_index=True, key=f"ad_ed_{sec}", use_container_width=True)
+                        # محرّر البيانات
+                        edited_data = st.data_editor(
+                            sec_df[disp], 
+                            column_config=column_config, 
+                            hide_index=True, 
+                            key=f"editor_{sec}", 
+                            use_container_width=True
+                        )
                         
-                        if st.button(f"💾 حفظ توجيهات {sec}", key=f"btn_{sec}"):
-                            with st.spinner("جاري الحفظ..."):
-                                updates = []
-                                for idx, row in adm_edit.iterrows():
-                                    real_id = sec_df.iloc[idx]["id"] # جلب المعرف الحقيقي من قاعدة البيانات
-                                    updates.append({"id": real_id, "action_note": str(row["action_note"])})
-                                
-                                supabase.table("project_data").upsert(updates).execute()
-                                st.toast(f"✅ تم حفظ توجيهات {sec} وتحديثها الآن", icon='🚀')
-                                st.rerun() # إعادة تحميل الصفحة لإظهار التعديلات فوراً
+                        # زر الحفظ
+                        if st.button(f"💾 اعتماد وإرسال توجيهات قسم {sec}", key=f"save_{sec}", type="primary"):
+                            updates = []
+                            for idx, row in edited_data.iterrows():
+                                # نستخدم المعرف الحقيقي من قاعدة البيانات
+                                db_id = sec_df.iloc[idx]["id"]
+                                updates.append({"id": db_id, "action_note": str(row["action_note"])})
+                            
+                            if updates:
+                                with st.spinner("جاري إرسال التوجيهات..."):
+                                    supabase.table("project_data").upsert(updates).execute()
+                                    st.success(f"✅ تم تحديث توجيهات قسم {sec} بنجاح!")
+                                    st.toast("تم الحفظ!", icon="✅")
+                                    # تأخير بسيط ثم إعادة تحميل لتحديث الجداول
+                                    st.rerun()
 
                 with tabs[-1]:
                     st.subheader("📊 ملخص كافة بيانات الأقسام")
@@ -103,16 +113,17 @@ else:
                             s_rec = full_df[(full_df["projects"].apply(lambda x: x["name"]) == p_name) & (full_df["section_name"] == sec)]
                             if not s_rec.empty:
                                 r = s_rec.iloc[0]
-                                if sec == "الحسابات": row[f"{sec}: وارد عملاء"] = r["col1"]; row[f"{sec}: الرصيد"] = r["col5"]
-                                else: row[f"{sec}: انجاز"] = r["col1"]; row[f"{sec}: الحالة"] = r["col3"]
+                                if sec == "الحسابات": row[f"{sec}: وارد"] = r["col1"]; row[f"{sec}: رصيد"] = r["col5"]
+                                else: row[f"{sec}: إنجاز"] = r["col1"]; row[f"{sec}: حالة"] = r["col3"]
                         pano_list.append(row)
                     st.dataframe(pd.DataFrame(pano_list), hide_index=True, use_container_width=True)
 
-        selected_section = st.sidebar.selectbox("اختر القسم للمراجعة/التعديل:", all_sections) if mode == "تحديث بيانات الأقسام" else None
+        selected_section = st.sidebar.selectbox("اختر القسم:", all_sections) if mode == "تحديث بيانات الأقسام" else None
     
     else:
+        # واجهة الموظف
         selected_section = st.session_state.user_section
-        st.title(f"🏗️ إدارة بيانات قسم: {selected_section}")
+        st.title(f"🏗️ قسم: {selected_section}")
 
     if selected_section:
         res = supabase.table("project_data").select("*, projects(name)").eq("section_name", selected_section).order("project_id").execute()
@@ -142,16 +153,14 @@ else:
             edited_df = st.data_editor(df[display_cols], column_config=config, hide_index=True, use_container_width=True)
 
             if st.button(f"🚀 حفظ بيانات {selected_section}", type="primary", use_container_width=True):
-                with st.spinner("جاري الحفظ..."):
-                    updates = []
-                    for i, row in edited_df.iterrows():
-                        p_id = int(df.iloc[i]["ID"])
-                        payload = {"project_id": p_id, "section_name": selected_section, "col1": str(row.get("col1", "")), "col2": str(row.get("col2", "")), "col3": str(row.get("col3", "")), "comment": str(row.get("comment", ""))}
-                        if selected_section == "الحسابات": payload.update({"col4": str(row.get("col4", "")), "col5": str(row.get("col5", ""))})
-                        updates.append(payload)
-                    supabase.table("project_data").upsert(updates, on_conflict="project_id, section_name").execute()
-                st.toast(f"✅ تم تحديث بيانات {selected_section} بنجاح", icon='📁')
-                st.success(f"تم الحفظ بنجاح!")
+                updates = []
+                for i, row in edited_df.iterrows():
+                    p_id = int(df.iloc[i]["ID"])
+                    payload = {"project_id": p_id, "section_name": selected_section, "col1": str(row.get("col1", "")), "col2": str(row.get("col2", "")), "col3": str(row.get("col3", "")), "comment": str(row.get("comment", ""))}
+                    if selected_section == "الحسابات": payload.update({"col4": str(row.get("col4", "")), "col5": str(row.get("col5", ""))})
+                    updates.append(payload)
+                supabase.table("project_data").upsert(updates, on_conflict="project_id, section_name").execute()
+                st.success("✅ تم التحديث بنجاح")
 
     if st.sidebar.button("🚪 تسجيل الخروج"):
         st.session_state.auth = False
