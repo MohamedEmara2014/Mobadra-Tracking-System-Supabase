@@ -35,9 +35,11 @@ if not st.session_state.auth:
         pwd = st.text_input("أدخل كلمة المرور الخاصة بك:", type="password")
         submit = st.form_submit_button("دخول")
         if submit:
+            # إضافة كلمة مرور لخدمة العملاء
             passwords = {
                 "Admin38": "admin", "Exec123": "التنفيذ", "Tech123": "المكتب الفني",
-                "Lic123": "التراخيص", "Acc123": "الحسابات", "Legal123": "الشئون القانونية", "Install123": "أقساط الجهاز"
+                "Lic123": "التراخيص", "Acc123": "الحسابات", "Legal123": "الشئون القانونية", 
+                "Install123": "أقساط الجهاز", "Cust123": "خدمة العملاء"
             }
             if pwd in passwords:
                 st.session_state.auth = True
@@ -49,7 +51,8 @@ if not st.session_state.auth:
                 st.error("❌ كلمة المرور غير صحيحة")
 else:
     st.set_page_config(page_title="نظام المبادرة", layout="wide")
-    all_sections = ["التنفيذ", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز"]
+    # تحديث قائمة الأقسام لتشمل خدمة العملاء
+    all_sections = ["التنفيذ", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز", "خدمة العملاء"]
 
     # --- أ. واجهة المدير العام ---
     if st.session_state.role == "admin":
@@ -141,7 +144,6 @@ else:
                 uploaded_file = st.file_uploader("📂 رفع الملف بعد ملئه لتحديث الجدول", type=["xlsx"])
                 if uploaded_file:
                     try:
-                        # تم إضافة .fillna('') هنا لمنع ظهور nan
                         up_df = pd.read_excel(uploaded_file).fillna('')
                         st.success("✅ تم قراءة الملف بنجاح، يرجى مراجعة الجدول أدناه ثم الضغط على حفظ.")
                         for index, row in up_df.iterrows():
