@@ -35,7 +35,6 @@ if not st.session_state.auth:
         pwd = st.text_input("أدخل كلمة المرور الخاصة بك:", type="password")
         submit = st.form_submit_button("دخول")
         if submit:
-            # تم تصحيح رقم المشروع ليكون 38 كما ذكرت سابقاً
             passwords = {
                 "Admin38": "admin", "Exec123": "التنفيذ", "Tech123": "المكتب الفني",
                 "Lic123": "التراخيص", "Acc123": "الحسابات", "Legal123": "الشئون القانونية", "Install123": "أقساط الجهاز"
@@ -91,9 +90,9 @@ else:
                             except Exception as e:
                                 st.error(f"خطأ في الحفظ: {e}")
 
-            # --- التقرير المجمع الشامل (مع التوجيهات) ---
+            # --- التقرير المجمع الشامل (الأعمدة الكاملة) ---
             with tabs[-1]:
-                st.subheader("📋 التقرير المجمع الشامل (يتضمن توجيهات المدير)")
+                st.subheader("📋 التقرير المجمع التفصيلي (كافة البيانات)")
                 p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
                 
                 summary_rows = []
@@ -102,26 +101,32 @@ else:
                     for s in all_sections:
                         sub = full_df[(full_df["projects"].apply(lambda x: x["name"]) == p) & (full_df["section_name"] == s)]
                         if not sub.empty:
+                            target = sub.iloc[0]
                             if s == "الحسابات":
-                                row[f"{s}: الرصيد"] = sub.iloc[0]["col5"]
+                                row[f"{s}: وارد العملاء"] = target["col1"]
+                                row[f"{s}: صادر العملاء"] = target["col2"]
+                                row[f"{s}: وارد التنفيذ"] = target["col3"]
+                                row[f"{s}: صادر التنفيذ"] = target["col4"]
+                                row[f"{s}: الرصيد"] = target["col5"]
                             else:
-                                row[f"{s}: الحالة"] = sub.iloc[0]["col3"]
+                                row[f"{s}: ما تم إنجازه"] = target["col1"]
+                                row[f"{s}: المعوقات"] = target["col2"]
+                                row[f"{s}: الحالة"] = target["col3"]
                             
-                            # إضافة توجيه المدير بجانب كل قسم في الجدول المجمع
-                            row[f"{s}: توجيه المدير"] = sub.iloc[0]["action_note"]
+                            row[f"{s}: ملاحظات القسم"] = target["comment"]
+                            row[f"{s}: توجيه المدير"] = target["action_note"]
                     summary_rows.append(row)
                 
                 final_summary_df = pd.DataFrame(summary_rows)
                 st.dataframe(final_summary_df, hide_index=True, use_container_width=True)
                 
-                # حل مشكلة ModuleNotFoundError باستخدام محرك التحميل الافتراضي
+                # زر التحميل
                 buffer = io.BytesIO()
                 final_summary_df.to_excel(buffer, index=False)
-                
                 st.download_button(
                     label="📥 تحميل التقرير المجمع الشامل (Excel)",
                     data=buffer.getvalue(),
-                    file_name=f"التقرير_المجمع_{datetime.now().strftime('%d-%m-%Y')}.xlsx",
+                    file_name=f"التقرير_المجمع_الشامل_{datetime.now().strftime('%d-%m-%Y')}.xlsx",
                     mime="application/vnd.ms-excel",
                     type="primary"
                 )
