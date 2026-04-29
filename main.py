@@ -35,7 +35,6 @@ if not st.session_state.auth:
         pwd = st.text_input("أدخل كلمة المرور الخاصة بك:", type="password")
         submit = st.form_submit_button("دخول")
         if submit:
-            # إضافة كلمة مرور لخدمة العملاء
             passwords = {
                 "Admin38": "admin", "Exec123": "التنفيذ", "Tech123": "المكتب الفني",
                 "Lic123": "التراخيص", "Acc123": "الحسابات", "Legal123": "الشئون القانونية", 
@@ -51,7 +50,6 @@ if not st.session_state.auth:
                 st.error("❌ كلمة المرور غير صحيحة")
 else:
     st.set_page_config(page_title="نظام المبادرة", layout="wide")
-    # تحديث قائمة الأقسام لتشمل خدمة العملاء
     all_sections = ["التنفيذ", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز", "خدمة العملاء"]
 
     # --- أ. واجهة المدير العام ---
