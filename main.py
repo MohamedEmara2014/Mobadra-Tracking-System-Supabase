@@ -84,34 +84,43 @@ else:
                             except Exception as e:
                                 st.error(f"فشل الحفظ: {e}")
 
-            # --- التحديث: الجدول المجمع وزر التحميل ---
+            # --- التحديث: الجدول المجمع (يحتوي جميع الأعمدة لكل قسم) ---
             with tabs[-1]:
-                st.subheader("📋 ملخص المبادرة الشامل لكافة الأقسام")
+                st.subheader("📋 التقرير المجمع الشامل لكافة البيانات (38 مشروع)")
                 p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
+                
                 summary_data = []
                 for p in p_names:
                     row = {"المشروع": p}
                     for s in all_sections:
                         sub = full_df[(full_df["projects"].apply(lambda x: x["name"]) == p) & (full_df["section_name"] == s)]
                         if not sub.empty:
-                            c1_name = "وارد العملاء" if s == "الحسابات" else "ما تم إنجازه"
-                            st_name = "الرصيد" if s == "الحسابات" else "حالة المشروع"
-                            row[f"{s}: {c1_name}"] = sub.iloc[0]["col1"]
-                            row[f"{s}: {st_name}"] = sub.iloc[0]["col3"] if s != "الحسابات" else sub.iloc[0]["col5"]
+                            if s == "الحسابات":
+                                row[f"{s}: وارد العملاء"] = sub.iloc[0]["col1"]
+                                row[f"{s}: صادر العملاء"] = sub.iloc[0]["col2"]
+                                row[f"{s}: وارد التنفيذ"] = sub.iloc[0]["col3"]
+                                row[f"{s}: صادر التنفيذ"] = sub.iloc[0]["col4"]
+                                row[f"{s}: الرصيد"] = sub.iloc[0]["col5"]
+                            else:
+                                row[f"{s}: ما تم انجازه"] = sub.iloc[0]["col1"]
+                                row[f"{s}: المعوقات"] = sub.iloc[0]["col2"]
+                                row[f"{s}: الحالة"] = sub.iloc[0]["col3"]
+                            
+                            row[f"{s}: ملاحظات"] = sub.iloc[0]["comment"]
+                            row[f"{s}: توجيه المدير"] = sub.iloc[0]["action_note"]
                     summary_data.append(row)
                 
                 final_summary_df = pd.DataFrame(summary_data)
                 
-                # عرض الجدول
                 st.dataframe(final_summary_df, hide_index=True, use_container_width=True)
                 
-                # زر تحميل الجدول المجمع كملف إكسيل
+                # زر تحميل التقرير الشامل
                 excel_buffer = io.BytesIO()
                 final_summary_df.to_excel(excel_buffer, index=False)
                 st.download_button(
-                    label="📥 تحميل التقرير المجمع كاملاً (Excel)",
+                    label="📥 تحميل التقرير المجمع الشامل (Excel)",
                     data=excel_buffer.getvalue(),
-                    file_name="التقرير_المجمع_للمبادرة.xlsx",
+                    file_name="التقرير_الشامل_للمبادرة.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     type="primary",
                     use_container_width=True
