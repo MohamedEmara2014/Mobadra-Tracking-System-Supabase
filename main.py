@@ -35,6 +35,7 @@ if not st.session_state.auth:
         pwd = st.text_input("أدخل كلمة المرور الخاصة بك:", type="password")
         submit = st.form_submit_button("دخول")
         if submit:
+            # تم تصحيح رقم المشروع ليكون 38 كما ذكرت سابقاً
             passwords = {
                 "Admin38": "admin", "Exec123": "التنفيذ", "Tech123": "المكتب الفني",
                 "Lic123": "التراخيص", "Acc123": "الحسابات", "Legal123": "الشئون القانونية", "Install123": "أقساط الجهاز"
@@ -85,13 +86,14 @@ else:
                             updates = [{"id": int(sec_data.iloc[idx]["id"]), "section_name": sec_name, "action_note": str(edited_adm.iloc[idx].get("توجيه المدير", ""))} for idx in range(len(edited_adm))]
                             try:
                                 supabase.table("project_data").upsert(updates).execute()
-                                st.success(f"✅ تم إرسال التوجيهات لقسم {sec_name} بنجاح")
-                                st.toast("تم الحفظ")
+                                st.success(f"✅ تم حفظ توجيهات قسم {sec_name}")
+                                st.toast("تم الحفظ بنجاح")
                             except Exception as e:
-                                st.error(f"خطأ: {e}")
+                                st.error(f"خطأ في الحفظ: {e}")
 
+            # --- التقرير المجمع الشامل (مع التوجيهات) ---
             with tabs[-1]:
-                st.subheader("📋 التقرير المجمع الشامل لجميع الأقسام")
+                st.subheader("📋 التقرير المجمع الشامل (يتضمن توجيهات المدير)")
                 p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
                 
                 summary_rows = []
@@ -101,28 +103,26 @@ else:
                         sub = full_df[(full_df["projects"].apply(lambda x: x["name"]) == p) & (full_df["section_name"] == s)]
                         if not sub.empty:
                             if s == "الحسابات":
-                                row[f"{s}: وارد العملاء"] = sub.iloc[0]["col1"]
-                                row[f"{s}: صادر العملاء"] = sub.iloc[0]["col2"]
                                 row[f"{s}: الرصيد"] = sub.iloc[0]["col5"]
                             else:
-                                row[f"{s}: ما تم إنجازه"] = sub.iloc[0]["col1"]
                                 row[f"{s}: الحالة"] = sub.iloc[0]["col3"]
-                            row[f"{s}: ملاحظات"] = sub.iloc[0]["comment"]
+                            
+                            # إضافة توجيه المدير بجانب كل قسم في الجدول المجمع
+                            row[f"{s}: توجيه المدير"] = sub.iloc[0]["action_note"]
                     summary_rows.append(row)
                 
                 final_summary_df = pd.DataFrame(summary_rows)
                 st.dataframe(final_summary_df, hide_index=True, use_container_width=True)
                 
-                # إمكانية تحميل ملف الإكسيل المجمع
+                # حل مشكلة ModuleNotFoundError باستخدام محرك التحميل الافتراضي
                 buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                    final_summary_df.to_excel(writer, index=False, sheet_name='التقرير المجمع')
+                final_summary_df.to_excel(buffer, index=False)
                 
                 st.download_button(
                     label="📥 تحميل التقرير المجمع الشامل (Excel)",
                     data=buffer.getvalue(),
-                    file_name=f"التقرير_المجمع_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    file_name=f"التقرير_المجمع_{datetime.now().strftime('%d-%m-%Y')}.xlsx",
+                    mime="application/vnd.ms-excel",
                     type="primary"
                 )
 
@@ -169,7 +169,7 @@ else:
                     st.success(f"✅ تم حفظ بيانات قسم {sec} بنجاح!")
                     st.toast("تم التحديث")
                 except Exception as e:
-                    st.error(f"خطأ: {e}")
+                    st.error(f"خطأ في الحفظ: {e}")
 
     if st.sidebar.button("🚪 تسجيل الخروج"):
         st.session_state.auth = False
