@@ -14,43 +14,103 @@ def init_connection():
 
 supabase = init_connection()
 
-# --- 2. إدارة الجلسة والدخول ---
+# --- 2. إدارة الجلسة والدخول بخصوصية كاملة ---
 if "auth" not in st.session_state:
     st.session_state.auth = False
     st.session_state.role = None
+    st.session_state.user_section = None
 
 if not st.session_state.auth:
     st.set_page_config(page_title="تسجيل الدخول", layout="centered")
     st.title("🔐 نظام متابعة مشروعات المبادرة")
     with st.form("login_form"):
-        pwd = st.text_input("أدخل كلمة المرور:", type="password")
+        pwd = st.text_input("أدخل كلمة المرور الخاصة بك:", type="password")
         submit = st.form_submit_button("دخول")
         if submit:
-            if pwd == "Admin38": 
+            # خريطة كلمات السر
+            passwords = {
+                "Admin38": "admin",
+                "Exec123": "التنفيذ",
+                "Tech123": "المكتب الفني",
+                "Lic123": "التراخيص",
+                "Acc123": "الحسابات",
+                "Legal123": "الشئون القانونية",
+                "Install123": "أقساط الجهاز"
+            }
+            if pwd in passwords:
+                val = passwords[pwd]
                 st.session_state.auth = True
-                st.session_state.role = "admin"
-                st.rerun()
-            elif pwd == "Staff123": 
-                st.session_state.auth = True
-                st.session_state.role = "staff"
+                if val == "admin":
+                    st.session_state.role = "admin"
+                else:
+                    st.session_state.role = "staff"
+                    st.session_state.user_section = val
                 st.rerun()
             else:
                 st.error("❌ كلمة المرور غير صحيحة")
 else:
     st.set_page_config(page_title="نظام المبادرة المطور", layout="wide")
-    sections = ["التنفيذ", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز"]
+    all_sections = ["التنفيذ", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز"]
 
+    # --- 3. لوحة المدير (Admin) ---
     if st.session_state.role == "admin":
         mode = st.sidebar.radio("🎮 لوحة التحكم الإدارية:", ["التقرير المجمع الشامل", "تحديث بيانات الأقسام"])
-    else:
-        mode = "تحديث بيانات الأقسام"
-
-    # --- 3. وضع تحديث البيانات (رؤساء الأقسام) ---
-    if mode == "تحديث بيانات الأقسام":
-        st.title("🏗️ تحديث بيانات الأقسام")
-        selected_section = st.sidebar.selectbox("اختر القسم المختص:", sections)
-        res = supabase.table("project_data").select("*, projects(name)").eq("section_name", selected_section).order("project_id").execute()
         
+        if mode == "التقرير المجمع الشامل":
+            st.title("📊 التقرير المجمع الشامل")
+            all_res = supabase.table("project_data").select("*, projects(name)").execute()
+            if all_res.data:
+                full_df = pd.DataFrame(all_res.data)
+                p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]))
+                
+                tabs = st.tabs(all_sections + ["📋 الجدول المجمع"])
+                
+                for i, sec in enumerate(all_sections):
+                    with tabs[i]:
+                        sec_data = full_df[full_df["section_name"] == sec].copy().sort_values("project_id")
+                        sec_data["المشروع"] = sec_data["projects"].apply(lambda x: x["name"])
+                        if sec == "الحسابات":
+                            m_cols = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد", "comment": "ملاحظات", "action_note": "توجيه المدير"}
+                            disp = ["المشروع", "col1", "col2", "col3", "col4", "col5", "comment", "action_note"]
+                        else:
+                            m_cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات", "action_note": "توجيه المدير"}
+                            disp = ["المشروع", "col1", "col2", "col3", "comment", "action_note"]
+                        
+                        adm_edit = st.data_editor(sec_data[disp], column_config={k: v for k, v in m_cols.items()}, hide_index=True, key=f"ad_{sec}", use_container_width=True)
+                        if st.button(f"💾 حفظ توجيهات {sec}", key=f"btn_{sec}"):
+                            updates = [{"id": sec_data.iloc[idx]["id"], "action_note": str(row["action_note"])} for idx, row in adm_edit.iterrows()]
+                            supabase.table("project_data").upsert(updates).execute()
+                            st.success(f"✅ تم الحفظ")
+
+                with tabs[-1]:
+                    st.subheader("📊 ملخص كافة بيانات الأقسام")
+                    pano_list = []
+                    for p_name in p_names:
+                        row = {"المشروع": p_name}
+                        for sec in all_sections:
+                            s_rec = full_df[(full_df["projects"].apply(lambda x: x["name"]) == p_name) & (full_df["section_name"] == sec)]
+                            if not s_rec.empty:
+                                r = s_rec.iloc[0]
+                                if sec == "الحسابات": row[f"{sec}: وارد عملاء"] = r["col1"]; row[f"{sec}: الرصيد"] = r["col5"]
+                                else: row[f"{sec}: انجاز"] = r["col1"]; row[f"{sec}: الحالة"] = r["col3"]
+                        pano_list.append(row)
+                    pano_df = pd.DataFrame(pano_list)
+                    st.dataframe(pano_df, hide_index=True, use_container_width=True)
+                    st.divider()
+                    if st.button("📑 تجهيز وتحميل الجدول المجمع (إكسيل)"):
+                        buf = io.BytesIO()
+                        pano_df.to_excel(buf, index=False)
+                        st.download_button("📥 تحميل الآن", buf.getvalue(), "Global_Summary.xlsx", type="primary")
+
+        selected_section = st.sidebar.selectbox("اختر القسم للمراجعة/التعديل:", all_sections) if mode == "تحديث بيانات الأقسام" else None
+    
+    # --- 4. لوحة الموظفين (Staff) - يرى قسمه فقط ---
+    else:
+        selected_section = st.session_state.user_section
+        st.title(f"🏗️ إدارة بيانات قسم: {selected_section}")
+
+    if selected_section:
+        res = supabase.table("project_data").select("*, projects(name)").eq("section_name", selected_section).order("project_id").execute()
         if res.data:
             df = pd.DataFrame([{
                 "ID": r["project_id"], "المشروع": r["projects"]["name"],
@@ -68,11 +128,17 @@ else:
 
             with st.sidebar:
                 st.divider()
-                if st.button("📊 تجهيز ملف إكسيل للتحميل"):
+                if st.button("📊 تجهيز إكسيل للقسم"):
                     tmp_df = df[display_cols].rename(columns=mapper)
-                    export_buffer = io.BytesIO()
-                    tmp_df.to_excel(export_buffer, index=False)
-                    st.download_button("✅ تأكيد وتحميل الملف", export_buffer.getvalue(), f"{selected_section}.xlsx")
+                    buf = io.BytesIO(); tmp_df.to_excel(buf, index=False)
+                    st.download_button("📥 تحميل", buf.getvalue(), f"{selected_section}.xlsx")
+                
+                up_file = st.file_uploader("📤 رفع إكسيل للتحديث", type=["xlsx"])
+                if up_file:
+                    up_df = pd.read_excel(up_file).fillna("")
+                    for k, v in mapper.items():
+                        if v in up_df.columns: df[k] = up_df[v].values[:len(df)]
+                    st.success("✅ تم التحديث من الملف. اضغط حفظ.")
 
             st.subheader(f"📍 سجل بيانات: {selected_section}")
             config = {
@@ -84,7 +150,7 @@ else:
             }
             edited_df = st.data_editor(df[display_cols], column_config=config, hide_index=True, use_container_width=True)
 
-            if st.button(f"🚀 حفظ بيانات {selected_section}", type="primary"):
+            if st.button(f"🚀 حفظ بيانات {selected_section}", type="primary", use_container_width=True):
                 updates = []
                 for i, row in edited_df.iterrows():
                     p_id = int(df.iloc[i]["ID"])
@@ -93,71 +159,6 @@ else:
                     updates.append(payload)
                 supabase.table("project_data").upsert(updates, on_conflict="project_id, section_name").execute()
                 st.success("✅ تم الحفظ بنجاح")
-
-    # --- 4. وضع التقرير المجمع (المدير) ---
-    elif mode == "التقرير المجمع الشامل":
-        st.title("📊 التقرير المجمع الشامل")
-        all_res = supabase.table("project_data").select("*, projects(name)").execute()
-        
-        if all_res.data:
-            full_df = pd.DataFrame(all_res.data)
-            p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]))
-            tabs = st.tabs(sections + ["📋 الجدول المجمع"])
-            
-            # تبويبات الأقسام الفردية
-            for i, sec in enumerate(sections):
-                with tabs[i]:
-                    sec_data = full_df[full_df["section_name"] == sec].copy().sort_values("project_id")
-                    sec_data["المشروع"] = sec_data["projects"].apply(lambda x: x["name"])
-                    
-                    if sec == "الحسابات":
-                        m_cols = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد", "comment": "ملاحظات", "action_note": "توجيه المدير"}
-                        disp = ["المشروع", "col1", "col2", "col3", "col4", "col5", "comment", "action_note"]
-                    else:
-                        m_cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات", "action_note": "توجيه المدير"}
-                        disp = ["المشروع", "col1", "col2", "col3", "comment", "action_note"]
-                    
-                    adm_edit = st.data_editor(sec_data[disp], column_config={k: v for k, v in m_cols.items()}, hide_index=True, key=f"ad_{sec}", use_container_width=True)
-                    
-                    if st.button(f"💾 حفظ توجيهات {sec}", key=f"btn_{sec}"):
-                        updates = [{"id": sec_data.iloc[sec_data.index.get_loc(sec_data.index[idx])]["id"], "action_note": str(row["action_note"])} for idx, row in adm_edit.iterrows()]
-                        supabase.table("project_data").upsert(updates).execute()
-                        st.success(f"✅ تم الحفظ")
-
-            # التبويب الأخير: الجدول المجمع
-            with tabs[-1]:
-                st.subheader("📊 ملخص كافة بيانات الأقسام")
-                pano_list = []
-                for p_name in p_names:
-                    row = {"المشروع": p_name}
-                    for sec in sections:
-                        s_rec = full_df[(full_df["projects"].apply(lambda x: x["name"]) == p_name) & (full_df["section_name"] == sec)]
-                        if not s_rec.empty:
-                            r = s_rec.iloc[0]
-                            if sec == "الحسابات":
-                                row[f"{sec}: وارد عملاء"] = r["col1"]; row[f"{sec}: الرصيد"] = r["col5"]
-                            else:
-                                row[f"{sec}: انجاز"] = r["col1"]; row[f"{sec}: الحالة"] = r["col3"]
-                    pano_list.append(row)
-                
-                pano_df = pd.DataFrame(pano_list)
-                st.dataframe(pano_df, hide_index=True, use_container_width=True)
-                
-                st.divider()
-                st.write("📂 **تصدير الجدول المجمع الحالي إلى إكسيل (للمدير فقط):**")
-                
-                # زر تجهيز التحميل اليدوي للجدول المجمع
-                if st.button("📑 تجهيز ملف الجدول المجمع للتحميل"):
-                    export_buffer = io.BytesIO()
-                    pano_df.to_excel(export_buffer, index=False)
-                    st.download_button(
-                        label="📥 اضغط هنا لتأكيد تحميل الجدول المجمع",
-                        data=export_buffer.getvalue(),
-                        file_name="Global_Summary_Report.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        type="primary",
-                        use_container_width=True
-                    )
 
     if st.sidebar.button("🚪 تسجيل الخروج"):
         st.session_state.auth = False
