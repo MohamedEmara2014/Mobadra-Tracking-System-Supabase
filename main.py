@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client
 import io
+from datetime import datetime
 
 # --- 1. الاتصال بقاعدة البيانات ---
 SUPABASE_URL = "https://rsyyhhpjnzkgnhzuekij.supabase.co"
@@ -15,7 +16,6 @@ supabase = init_connection()
 
 def get_data_fresh():
     try:
-        # جلب البيانات مع التأكد من وجود عمود التحديث
         res = supabase.table("project_data").select("*, projects(name)").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except Exception as e:
@@ -57,7 +57,6 @@ else:
         full_df = get_data_fresh()
         
         if not full_df.empty:
-            # معالجة الوقت وتعديل التوقيت ليكون محلياً
             if 'updated_at' in full_df.columns:
                 full_df['updated_at_formatted'] = pd.to_datetime(full_df['updated_at']).dt.tz_convert('Asia/Riyadh').dt.strftime('%Y-%m-%d %I:%M %p')
             
@@ -68,9 +67,8 @@ else:
                     sec_data = full_df[full_df["section_name"] == sec_name].copy().sort_values("project_id")
                     
                     if not sec_data.empty:
-                        # إظهار الوقت بجانب عنوان الجدول مباشرة
                         last_up = sec_data['updated_at_formatted'].iloc[0] if 'updated_at_formatted' in sec_data.columns else "غير مسجل"
-                        st.markdown(f"### 📑 بيانات قسم {sec_name} <span style='font-size: 0.6em; color: gray;'>(آخر تحديث: {last_up})</span>", unsafe_allow_html=True)
+                        st.markdown(f"### 📑 بيانات قسم {sec_name} <span style='font-size: 0.7em; color: #1E88E5;'> (آخر تحديث استلمه النظام: {last_up})</span>", unsafe_allow_html=True)
                         
                         sec_data["المشروع"] = sec_data["projects"].apply(lambda x: x["name"])
                         
@@ -82,22 +80,15 @@ else:
                             cols = ["المشروع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه المدير"]
                         
                         display_df = sec_data.rename(columns=map_dict)[cols]
+                        edited_adm = st.data_editor(display_df, column_config={"المشروع": st.column_config.TextColumn(disabled=True), "توجيه المدير": st.column_config.TextColumn("📝 إضافة توجيه", width="large")}, hide_index=True, use_container_width=True, key=f"adm_ed_key_{sec_name}")
                         
-                        edited_adm = st.data_editor(
-                            display_df, 
-                            column_config={
-                                "المشروع": st.column_config.TextColumn(disabled=True),
-                                "توجيه المدير": st.column_config.TextColumn("📝 إضافة توجيه", width="large")
-                            }, 
-                            hide_index=True, use_container_width=True, key=f"adm_ed_key_{sec_name}"
-                        )
-                        
-                        if st.button(f"💾 اعتماد وإرسال توجيهات {sec_name}", key=f"btn_save_adm_{sec_name}"):
+                        if st.button(f"💾 حفظ وإرسال توجيهات {sec_name}", key=f"btn_save_adm_{sec_name}", type="primary"):
                             updates = [{"id": int(sec_data.iloc[idx]["id"]), "section_name": sec_name, "action_note": str(edited_adm.iloc[idx].get("توجيه المدير", ""))} for idx in range(len(edited_adm))]
                             try:
                                 supabase.table("project_data").upsert(updates).execute()
-                                st.success(f"✅ تم إرسال التوجيهات لقسم {sec_name} بنجاح.")
-                                st.rerun() # تحديث الصفحة لجلب الوقت الجديد فوراً
+                                st.toast(f"✅ تم حفظ توجيهات {sec_name}")
+                                st.success(f"✅ تم إرسال التوجيهات بنجاح إلى قسم {sec_name}")
+                                # لا نضع rerun هنا مباشرة لنسمح للمدير برؤية رسالة النجاح
                             except Exception as e:
                                 st.error(f"فشل الحفظ: {e}")
 
@@ -114,24 +105,24 @@ else:
                             row[f"{s}: {c1_name}"] = sub.iloc[0]["col1"]
                             row[f"{s}: الحالة/الرصيد"] = sub.iloc[0]["col3"] if s != "الحسابات" else sub.iloc[0]["col5"]
                     summary_data.append(row)
-                
-                sum_df = pd.DataFrame(summary_data)
-                st.dataframe(sum_df, hide_index=True, use_container_width=True)
-                
-                excel_buffer = io.BytesIO()
-                sum_df.to_excel(excel_buffer, index=False)
-                st.download_button("📥 تحميل التقرير المجمع (Excel)", excel_buffer.getvalue(), "التقرير_المجمع.xlsx", type="primary")
+                st.dataframe(pd.DataFrame(summary_data), hide_index=True, use_container_width=True)
 
     # --- ب. واجهة الأقسام (Staff) ---
     else:
         sec = st.session_state.user_section
         st.title(f"🏗️ إدارة بيانات قسم: {sec}")
+        
+        # عرض الوقت الحالي للقسم قبل التعديل
         res = supabase.table("project_data").select("*, projects(name)").eq("section_name", sec).order("project_id").execute()
         
         if res.data:
             db_df = pd.DataFrame(res.data)
             db_df["المشروع"] = db_df["projects"].apply(lambda x: x["name"])
             
+            # عرض آخر تحديث بجوار العنوان للموظف أيضاً
+            last_up_staff = pd.to_datetime(db_df['updated_at'].iloc[0]).tz_convert('Asia/Riyadh').strftime('%Y-%m-%d %I:%M %p') if 'updated_at' in db_df.columns else "غير مسجل"
+            st.info(f"📅 آخر مرة قمت فيها بحفظ البيانات: {last_up_staff}")
+
             if sec == "الحسابات":
                 map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه المدير"}
                 cols = ["المشروع", "🚩 توجيه المدير", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد", "ملاحظات القسم"]
@@ -140,23 +131,35 @@ else:
                 cols = ["المشروع", "🚩 توجيه المدير", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
 
             display_df = db_df.rename(columns=map_dict)[cols]
-
             status_options = ["🟢 مكتمل", "🔵 قيد التنفيذ", "🟠 بانتظار مستندات", "🔴 متوقف / معلق"]
+            
             edited_staff = st.data_editor(display_df, column_config={"المشروع": st.column_config.TextColumn(disabled=True), "🚩 توجيه المدير": st.column_config.TextColumn(disabled=True), "حالة المشروع": st.column_config.SelectboxColumn("حالة المشروع", options=status_options) if sec != "الحسابات" else None}, hide_index=True, use_container_width=True, key="staff_editor")
 
-            if st.button("🚀 حفظ البيانات النهائية", type="primary", use_container_width=True):
+            if st.button("🚀 حفظ البيانات وإرسالها للمدير", type="primary", use_container_width=True):
                 updates = []
+                current_now = datetime.now().isoformat() # توقيت يدوي لضمان التحديث
+                
                 for idx in range(len(edited_staff)):
                     row = edited_staff.iloc[idx]
-                    payload = {"id": int(db_df.iloc[idx]["id"]), "section_name": sec, "col1": str(row.get(map_dict["col1"], "")), "col2": str(row.get(map_dict["col2"], "")), "col3": str(row.get(map_dict["col3"], "")), "comment": str(row.get(map_dict["comment"], ""))}
-                    if sec == "الحسابات": payload.update({"col4": str(row.get("صادر التنفيذ", "")), "col5": str(row.get("الرصيد", ""))})
+                    payload = {
+                        "id": int(db_df.iloc[idx]["id"]),
+                        "section_name": sec,
+                        "col1": str(row.get(map_dict["col1"], "")),
+                        "col2": str(row.get(map_dict["col2"], "")),
+                        "col3": str(row.get(map_dict["col3"], "")),
+                        "comment": str(row.get(map_dict["comment"], "")),
+                        "updated_at": current_now # إجبار قاعدة البيانات على تحديث الوقت
+                    }
+                    if sec == "الحسابات":
+                        payload.update({"col4": str(row.get("صادر التنفيذ", "")), "col5": str(row.get("الرصيد", ""))})
                     updates.append(payload)
                 
                 try:
                     supabase.table("project_data").upsert(updates).execute()
                     st.balloons()
-                    st.success(f"🎊 تم حفظ بيانات قسم ({sec}) بنجاح!")
-                    st.rerun() # تحديث الصفحة لتأكيد الوقت في واجهة المدير
+                    st.success(f"🎊 تم حفظ بيانات قسم ({sec}) بنجاح وتحديث وقت الإرسال!")
+                    st.toast("تم التحديث بنجاح ✅")
+                    # ملاحظة: أزلنا st.rerun() للسماح بظهور رسالة النجاح والبالونات
                 except Exception as e:
                     st.error(f"خطأ في الحفظ: {e}")
 
