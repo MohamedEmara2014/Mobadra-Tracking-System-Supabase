@@ -51,7 +51,7 @@ else:
     st.set_page_config(page_title="نظام المبادرة", layout="wide")
     all_sections = ["التنفيذ", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز"]
 
-    # --- أ. واجهة المدير العام ---
+    # --- أ. واجهة المدير العام (يظهر فيها التاريخ والوقت) ---
     if st.session_state.role == "admin":
         st.title("📊 لوحة تحكم المدير العام")
         full_df = get_data_fresh()
@@ -67,8 +67,9 @@ else:
                     sec_data = full_df[full_df["section_name"] == sec_name].copy().sort_values("project_id")
                     
                     if not sec_data.empty:
+                        # إظهار الوقت للمدير فقط بجانب العنوان
                         last_up = sec_data['updated_at_formatted'].iloc[0] if 'updated_at_formatted' in sec_data.columns else "غير مسجل"
-                        st.markdown(f"### 📑 بيانات قسم {sec_name} <span style='font-size: 0.7em; color: #1E88E5;'> (آخر تحديث استلمه النظام: {last_up})</span>", unsafe_allow_html=True)
+                        st.markdown(f"### 📑 بيانات قسم {sec_name} <span style='font-size: 0.7em; color: #1E88E5;'> (آخر تحديث: {last_up})</span>", unsafe_allow_html=True)
                         
                         sec_data["المشروع"] = sec_data["projects"].apply(lambda x: x["name"])
                         
@@ -88,12 +89,12 @@ else:
                                 supabase.table("project_data").upsert(updates).execute()
                                 st.toast(f"✅ تم حفظ توجيهات {sec_name}")
                                 st.success(f"✅ تم إرسال التوجيهات بنجاح إلى قسم {sec_name}")
-                                # لا نضع rerun هنا مباشرة لنسمح للمدير برؤية رسالة النجاح
                             except Exception as e:
                                 st.error(f"فشل الحفظ: {e}")
 
             with tabs[-1]:
                 st.subheader("📋 التقرير المجمع الشامل")
+                # (بقية كود التقرير المجمع الشامل كما هو)
                 p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
                 summary_data = []
                 for p in p_names:
@@ -107,22 +108,17 @@ else:
                     summary_data.append(row)
                 st.dataframe(pd.DataFrame(summary_data), hide_index=True, use_container_width=True)
 
-    # --- ب. واجهة الأقسام (Staff) ---
+    # --- ب. واجهة الأقسام (لا يظهر فيها الوقت) ---
     else:
         sec = st.session_state.user_section
         st.title(f"🏗️ إدارة بيانات قسم: {sec}")
         
-        # عرض الوقت الحالي للقسم قبل التعديل
         res = supabase.table("project_data").select("*, projects(name)").eq("section_name", sec).order("project_id").execute()
         
         if res.data:
             db_df = pd.DataFrame(res.data)
             db_df["المشروع"] = db_df["projects"].apply(lambda x: x["name"])
             
-            # عرض آخر تحديث بجوار العنوان للموظف أيضاً
-            last_up_staff = pd.to_datetime(db_df['updated_at'].iloc[0]).tz_convert('Asia/Riyadh').strftime('%Y-%m-%d %I:%M %p') if 'updated_at' in db_df.columns else "غير مسجل"
-            st.info(f"📅 آخر مرة قمت فيها بحفظ البيانات: {last_up_staff}")
-
             if sec == "الحسابات":
                 map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه المدير"}
                 cols = ["المشروع", "🚩 توجيه المدير", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد", "ملاحظات القسم"]
@@ -137,7 +133,7 @@ else:
 
             if st.button("🚀 حفظ البيانات وإرسالها للمدير", type="primary", use_container_width=True):
                 updates = []
-                current_now = datetime.now().isoformat() # توقيت يدوي لضمان التحديث
+                current_now = datetime.now().isoformat()
                 
                 for idx in range(len(edited_staff)):
                     row = edited_staff.iloc[idx]
@@ -148,7 +144,7 @@ else:
                         "col2": str(row.get(map_dict["col2"], "")),
                         "col3": str(row.get(map_dict["col3"], "")),
                         "comment": str(row.get(map_dict["comment"], "")),
-                        "updated_at": current_now # إجبار قاعدة البيانات على تحديث الوقت
+                        "updated_at": current_now # تحديث الوقت في الخلفية ليظهر للمدير فقط
                     }
                     if sec == "الحسابات":
                         payload.update({"col4": str(row.get("صادر التنفيذ", "")), "col5": str(row.get("الرصيد", ""))})
@@ -157,9 +153,8 @@ else:
                 try:
                     supabase.table("project_data").upsert(updates).execute()
                     st.balloons()
-                    st.success(f"🎊 تم حفظ بيانات قسم ({sec}) بنجاح وتحديث وقت الإرسال!")
+                    st.success(f"🎊 تم حفظ بيانات قسم ({sec}) بنجاح!")
                     st.toast("تم التحديث بنجاح ✅")
-                    # ملاحظة: أزلنا st.rerun() للسماح بظهور رسالة النجاح والبالونات
                 except Exception as e:
                     st.error(f"خطأ في الحفظ: {e}")
 
