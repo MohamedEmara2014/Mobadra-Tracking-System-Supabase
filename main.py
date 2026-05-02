@@ -80,19 +80,7 @@ else:
                             cols = ["المشروع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه المدير"]
                         
                         display_df = sec_data.rename(columns=map_dict)[cols]
-                        
-                        # تحسين عرض النصوص الطويلة للمدير
-                        edited_adm = st.data_editor(
-                            display_df, 
-                            column_config={
-                                "المشروع": st.column_config.TextColumn(disabled=True), 
-                                "توجيه المدير": st.column_config.TextColumn("📝 إضافة توجيه", width="large"),
-                                "ما تم انجازه": st.column_config.TextColumn(width="large"),
-                                "المعوقات والمشاكل": st.column_config.TextColumn(width="large"),
-                                "ملاحظات القسم": st.column_config.TextColumn(width="large")
-                            }, 
-                            hide_index=True, use_container_width=True, key=f"adm_ed_{sec_name}"
-                        )
+                        edited_adm = st.data_editor(display_df, column_config={"المشروع": st.column_config.TextColumn(disabled=True), "توجيه المدير": st.column_config.TextColumn("📝 إضافة توجيه", width="large")}, hide_index=True, use_container_width=True, key=f"adm_ed_{sec_name}")
                         
                         if st.button(f"💾 حفظ توجيهات {sec_name}", key=f"btn_save_{sec_name}", type="primary"):
                             updates = [{"id": int(sec_data.iloc[idx]["id"]), "section_name": sec_name, "action_note": str(edited_adm.iloc[idx].get("توجيه المدير", ""))} for idx in range(len(edited_adm))]
@@ -125,17 +113,8 @@ else:
                 
                 final_summary_df = pd.DataFrame(summary_rows)
                 st.dataframe(final_summary_df, hide_index=True, use_container_width=True)
-                
                 buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                    final_summary_df.to_excel(writer, index=False, sheet_name='التقرير المجمع')
-                    workbook  = writer.book
-                    worksheet = writer.sheets['التقرير المجمع']
-                    # تنسيق الإكسيل ليكون النص واضحاً وملتفاً
-                    wrap_format = workbook.add_format({'text_wrap': True, 'valign': 'top', 'border': 1})
-                    for col_num, value in enumerate(final_summary_df.columns.values):
-                        worksheet.set_column(col_num, col_num, 35, wrap_format)
-
+                final_summary_df.to_excel(buffer, index=False)
                 st.download_button(label="📥 تحميل التقرير المجمع الشامل (Excel)", data=buffer.getvalue(), file_name=f"التقرير_المجمع_الشامل_{datetime.now().strftime('%d-%m-%Y')}.xlsx", mime="application/vnd.ms-excel", type="primary")
 
     # --- ب. واجهة الأقسام ---
@@ -155,15 +134,8 @@ else:
                     template_df["وارد العملاء"] = ""; template_df["صادر العملاء"] = ""; template_df["وارد التنفيذ"] = ""; template_df["صادر التنفيذ"] = ""; template_df["الرصيد"] = ""; template_df["ملاحظات القسم"] = ""
                 else:
                     template_df["ما تم انجازه"] = ""; template_df["المعوقات والمشاكل"] = ""; template_df["حالة المشروع"] = ""; template_df["ملاحظات القسم"] = ""
-                
                 tmp_buffer = io.BytesIO()
-                with pd.ExcelWriter(tmp_buffer, engine='xlsxwriter') as writer:
-                    template_df.to_excel(writer, index=False)
-                    workbook = writer.book
-                    worksheet = writer.sheets['Sheet1']
-                    wrap_format = workbook.add_format({'text_wrap': True, 'valign': 'top'})
-                    worksheet.set_column(1, 10, 35, wrap_format)
-
+                template_df.to_excel(tmp_buffer, index=False)
                 st.download_button("📥 تحميل نموذج الإكسيل لملئه", data=tmp_buffer.getvalue(), file_name=f"نموذج_{sec}.xlsx", mime="application/vnd.ms-excel")
 
             with col_exp2:
@@ -196,20 +168,7 @@ else:
 
             display_df = db_df.rename(columns=map_dict)[cols]
             status_options = ["🟢 مكتمل", "🔵 قيد التنفيذ", "🟠 بانتظار مستندات", "🔴 متوقف / معلق"]
-            
-            # زيادة عرض الأعمدة لتسهيل القراءة
-            edited_staff = st.data_editor(
-                display_df, 
-                column_config={
-                    "المشروع": st.column_config.TextColumn(disabled=True), 
-                    "🚩 توجيه المدير": st.column_config.TextColumn(disabled=True, width="large"), 
-                    "ما تم انجازه": st.column_config.TextColumn(width="large"),
-                    "المعوقات والمشاكل": st.column_config.TextColumn(width="large"),
-                    "ملاحظات القسم": st.column_config.TextColumn(width="large"),
-                    "حالة المشروع": st.column_config.SelectboxColumn("حالة المشروع", options=status_options) if sec != "الحسابات" else None
-                }, 
-                hide_index=True, use_container_width=True, key="staff_editor"
-            )
+            edited_staff = st.data_editor(display_df, column_config={"المشروع": st.column_config.TextColumn(disabled=True), "🚩 توجيه المدير": st.column_config.TextColumn(disabled=True), "حالة المشروع": st.column_config.SelectboxColumn("حالة المشروع", options=status_options) if sec != "الحسابات" else None}, hide_index=True, use_container_width=True, key="staff_editor")
 
             if st.button("🚀 حفظ البيانات النهائية", type="primary", use_container_width=True):
                 updates = []
@@ -221,7 +180,7 @@ else:
                     updates.append(payload)
                 try:
                     supabase.table("project_data").upsert(updates).execute()
-                    st.balloons(); st.success(f"✅ تم حفظ بيانات قسم {sec} بنجاح!"); st.rerun()
+                    st.balloons(); st.success(f"✅ تم حفظ بيانات قسم {sec} بنجاح!"); st.toast("تم التحديث")
                 except Exception as e:
                     st.error(f"خطأ في الحفظ: {e}")
 
