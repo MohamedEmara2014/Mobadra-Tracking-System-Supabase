@@ -81,15 +81,15 @@ else:
                         
                         display_df = sec_data.rename(columns=map_dict)[cols]
                         
-                        # تم تفعيل Text Wrapping هنا عبر TextColumn
+                        # تحسين عرض النصوص الطويلة للمدير
                         edited_adm = st.data_editor(
                             display_df, 
                             column_config={
                                 "المشروع": st.column_config.TextColumn(disabled=True), 
                                 "توجيه المدير": st.column_config.TextColumn("📝 إضافة توجيه", width="large"),
-                                "ما تم انجازه": st.column_config.TextColumn(width="medium"),
-                                "المعوقات والمشاكل": st.column_config.TextColumn(width="medium"),
-                                "ملاحظات القسم": st.column_config.TextColumn(width="medium")
+                                "ما تم انجازه": st.column_config.TextColumn(width="large"),
+                                "المعوقات والمشاكل": st.column_config.TextColumn(width="large"),
+                                "ملاحظات القسم": st.column_config.TextColumn(width="large")
                             }, 
                             hide_index=True, use_container_width=True, key=f"adm_ed_{sec_name}"
                         )
@@ -126,17 +126,15 @@ else:
                 final_summary_df = pd.DataFrame(summary_rows)
                 st.dataframe(final_summary_df, hide_index=True, use_container_width=True)
                 
-                # تصدير الإكسيل مع تنسيق Wrap Text وتوسيع الأعمدة تلقائياً
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                     final_summary_df.to_excel(writer, index=False, sheet_name='التقرير المجمع')
                     workbook  = writer.book
                     worksheet = writer.sheets['التقرير المجمع']
+                    # تنسيق الإكسيل ليكون النص واضحاً وملتفاً
                     wrap_format = workbook.add_format({'text_wrap': True, 'valign': 'top', 'border': 1})
-                    
-                    # تنسيق الأعمدة (العرض والتفاف النص)
                     for col_num, value in enumerate(final_summary_df.columns.values):
-                        worksheet.set_column(col_num, col_num, 25, wrap_format)
+                        worksheet.set_column(col_num, col_num, 35, wrap_format)
 
                 st.download_button(label="📥 تحميل التقرير المجمع الشامل (Excel)", data=buffer.getvalue(), file_name=f"التقرير_المجمع_الشامل_{datetime.now().strftime('%d-%m-%Y')}.xlsx", mime="application/vnd.ms-excel", type="primary")
 
@@ -164,7 +162,7 @@ else:
                     workbook = writer.book
                     worksheet = writer.sheets['Sheet1']
                     wrap_format = workbook.add_format({'text_wrap': True, 'valign': 'top'})
-                    worksheet.set_column(1, 10, 30, wrap_format)
+                    worksheet.set_column(1, 10, 35, wrap_format)
 
                 st.download_button("📥 تحميل نموذج الإكسيل لملئه", data=tmp_buffer.getvalue(), file_name=f"نموذج_{sec}.xlsx", mime="application/vnd.ms-excel")
 
@@ -199,15 +197,15 @@ else:
             display_df = db_df.rename(columns=map_dict)[cols]
             status_options = ["🟢 مكتمل", "🔵 قيد التنفيذ", "🟠 بانتظار مستندات", "🔴 متوقف / معلق"]
             
-            # تفعيل Wrap Text في واجهة الأقسام أيضاً
+            # زيادة عرض الأعمدة لتسهيل القراءة
             edited_staff = st.data_editor(
                 display_df, 
                 column_config={
                     "المشروع": st.column_config.TextColumn(disabled=True), 
                     "🚩 توجيه المدير": st.column_config.TextColumn(disabled=True, width="large"), 
-                    "ما تم انجازه": st.column_config.TextColumn(width="medium"),
-                    "المعوقات والمشاكل": st.column_config.TextColumn(width="medium"),
-                    "ملاحظات القسم": st.column_config.TextColumn(width="medium"),
+                    "ما تم انجازه": st.column_config.TextColumn(width="large"),
+                    "المعوقات والمشاكل": st.column_config.TextColumn(width="large"),
+                    "ملاحظات القسم": st.column_config.TextColumn(width="large"),
                     "حالة المشروع": st.column_config.SelectboxColumn("حالة المشروع", options=status_options) if sec != "الحسابات" else None
                 }, 
                 hide_index=True, use_container_width=True, key="staff_editor"
@@ -223,7 +221,7 @@ else:
                     updates.append(payload)
                 try:
                     supabase.table("project_data").upsert(updates).execute()
-                    st.balloons(); st.success(f"✅ تم حفظ بيانات قسم {sec} بنجاح!"); st.toast("تم التحديث")
+                    st.balloons(); st.success(f"✅ تم حفظ بيانات قسم {sec} بنجاح!"); st.rerun()
                 except Exception as e:
                     st.error(f"خطأ في الحفظ: {e}")
 
