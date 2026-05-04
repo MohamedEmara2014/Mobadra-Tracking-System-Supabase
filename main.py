@@ -84,11 +84,11 @@ else:
                         edited_adm = st.data_editor(
                             display_df, 
                             column_config={
-                                "المشروع": st.column_config.TextColumn(disabled=True), 
+                                "المشروع": st.column_config.TextColumn(disabled=True, pinned=True), # تثبيت العمود
                                 "توجيه المدير": st.column_config.TextColumn("📝 إضافة توجيه", width="large"),
-                                "الوارد": st.column_config.TextColumn(width="medium"),
-                                "الصادر": st.column_config.TextColumn(width="medium"),
-                                "الرصيد المتاح": st.column_config.TextColumn(width="medium")
+                                "ما تم انجازه": st.column_config.TextColumn(width="large"),
+                                "المعوقات والمشاكل": st.column_config.TextColumn(width="large"),
+                                "ملاحظات القسم": st.column_config.TextColumn(width="large")
                             }, 
                             hide_index=True, use_container_width=True, key=f"adm_ed_{sec_name}"
                         )
@@ -122,7 +122,8 @@ else:
                     summary_rows.append(row)
                 
                 final_summary_df = pd.DataFrame(summary_rows)
-                st.dataframe(final_summary_df, hide_index=True, use_container_width=True)
+                # استخدام dataframe مع تثبيت العمود الأول للمدير في العرض المجمع
+                st.dataframe(final_summary_df, hide_index=True, use_container_width=True, column_config={"المشروع": st.column_config.TextColumn(pinned=True)})
                 
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
@@ -196,11 +197,11 @@ else:
             edited_staff = st.data_editor(
                 display_df, 
                 column_config={
-                    "المشروع": st.column_config.TextColumn(disabled=True), 
+                    "المشروع": st.column_config.TextColumn(disabled=True, pinned=True), # تثبيت العمود
                     "🚩 توجيه المدير": st.column_config.TextColumn(disabled=True, width="large"), 
-                    "الوارد": st.column_config.TextColumn(width="medium"),
-                    "الصادر": st.column_config.TextColumn(width="medium"),
-                    "الرصيد المتاح": st.column_config.TextColumn(width="medium"),
+                    "ما تم انجازه": st.column_config.TextColumn(width="large"),
+                    "المعوقات والمشاكل": st.column_config.TextColumn(width="large"),
+                    "ملاحظات القسم": st.column_config.TextColumn(width="large"),
                     "حالة المشروع": st.column_config.SelectboxColumn("حالة المشروع", options=status_options) if sec != "الحسابات" else None
                 }, 
                 hide_index=True, use_container_width=True, key="staff_editor"
