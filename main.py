@@ -70,8 +70,6 @@ if not st.session_state.auth:
 else:
     st.set_page_config(page_title="نظام المبادرة", layout="wide")
     all_sections = ["التنفيذ", "الجدول الزمني", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز", "خدمة العملاء"]
-
-    # خيارات الحالة الزمنية
     TIME_STATUS_OPTIONS = ["✅ متوافق", "🚀 متقدم", "⚠️ متأخر"]
 
     # --- أ. واجهة المدير العام ---
@@ -84,20 +82,20 @@ else:
             if 'updated_at' in full_df.columns:
                 full_df['updated_at'] = pd.to_datetime(full_df['updated_at'])
             
-            tabs = st.tabs(all_sections + ["📋 التقرير المجمع"])
+            tabs = st.tabs(all_sections + ["📋 التقرير المجمع الشامل"])
+            
             for i, sec_name in enumerate(all_sections):
                 with tabs[i]:
                     sec_data = full_df[full_df["section_name"] == sec_name].copy().sort_values("project_id")
                     if not sec_data.empty:
                         last_update = sec_data['updated_at'].max()
                         formatted_time = last_update.strftime('%Y-%m-%d | %I:%M %p') if pd.notnull(last_update) else "لم يتم التحديث بعد"
-                        
                         st.markdown(f"### 📑 بيانات قسم {sec_name}")
                         st.info(f"🕒 **آخر تحديث لهذا القسم:** {formatted_time}")
                         
                         sec_data["المشروع"] = sec_data["projects"].apply(lambda x: x["name"])
                         
-                        # تخصيص المسميات حسب القسم للمدير
+                        # خرائط المسميات لكل قسم
                         if sec_name == "الحسابات":
                             map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}
                             cols = ["المشروع", "الموقع", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم", "توجيه الإدارة"]
@@ -122,6 +120,7 @@ else:
                             }, 
                             hide_index=True, use_container_width=True, key=f"adm_ed_{sec_name}"
                         )
+                        
                         if st.button(f"💾 حفظ توجيهات {sec_name}", key=f"btn_{sec_name}"):
                             updates = []
                             for idx in range(len(edited_adm)):
@@ -136,6 +135,27 @@ else:
                             except Exception as e:
                                 st.error(f"خطأ في الحفظ: {e}")
 
+            # --- تبويب التقرير المجمع الشامل ---
+            with tabs[-1]:
+                st.subheader("📋 التقرير المجمع لكافة الأقسام")
+                if not full_df.empty:
+                    # تحويل البيانات لعرضها بشكل منظم
+                    summary_df = full_df.copy()
+                    summary_df["المشروع"] = summary_df["projects"].apply(lambda x: x["name"])
+                    
+                    # عرض الأعمدة الأساسية فقط في التقرير المجمع لتجنب التشتت
+                    cols_to_show = ["المشروع", "الموقع", "section_name", "col1", "col2", "col3", "comment", "action_note", "updated_at"]
+                    final_summary = summary_df[cols_to_show].rename(columns={
+                        "section_name": "القسم",
+                        "col1": "البيان 1",
+                        "col2": "البيان 2",
+                        "col3": "البيان 3",
+                        "comment": "ملاحظات القسم",
+                        "action_note": "توجيه الإدارة",
+                        "updated_at": "تاريخ التحديث"
+                    })
+                    st.dataframe(final_summary, use_container_width=True, hide_index=True)
+
     # --- ب. واجهة الأقسام (الموظفين) ---
     else:
         sec = st.session_state.user_section
@@ -147,7 +167,6 @@ else:
             db_df = add_location_column(db_df)
             db_df["المشروع"] = db_df["projects"].apply(lambda x: x["name"])
             
-            # مسميات الأعمدة للأقسام عند الإدخال
             if sec == "الحسابات":
                 map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}
                 cols = ["المشروع", "الموقع", "🚩 توجيه الإدارة", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم"]
