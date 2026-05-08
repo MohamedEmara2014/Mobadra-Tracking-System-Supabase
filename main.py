@@ -162,11 +162,11 @@ else:
                 try:
                     for idx in range(len(edited_df)):
                         row = edited_df.iloc[idx]
-                        # الإجراء التصحيحي: إضافة section_name و project_id بشكل صريح في كل صف
+                        # تعيين البيانات مع ضمان وجود الأعمدة الإلزامية
                         updates.append({
                             "id": int(db_df.iloc[idx]["id"]),
-                            "section_name": sec, # التأكد من إرسال اسم القسم
-                            "project_id": int(db_df.iloc[idx]["project_id"]), # التأكد من إرسال معرف المشروع
+                            "section_name": str(sec),
+                            "project_id": int(db_df.iloc[idx]["project_id"]),
                             "col1": clean(row.get(m_dict.get("col1"), "")),
                             "col2": clean(row.get(m_dict.get("col2"), "")),
                             "col3": clean(row.get(m_dict.get("col3"), "")),
@@ -179,6 +179,9 @@ else:
                     if updates:
                         supabase.table("project_data").upsert(updates).execute()
                         st.success("✅ تم حفظ وتحديث كافة البيانات بنجاح.")
+                        # تأخير بسيط ليرى المستخدم الرسالة قبل إعادة التحميل
+                        import time
+                        time.sleep(1.5)
                         st.rerun()
                 except Exception as e:
                     st.error(f"❌ حدث خطأ أثناء الحفظ: {e}")
