@@ -41,6 +41,28 @@ def add_location_column(df):
         )
     return df
 
+# قاموس المسميات الموحد لاستخدامه في التقرير المجمع
+def get_mapped_df(df, sec_name):
+    if sec_name == "الحسابات":
+        m = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات الحسابات"}
+    elif sec_name == "الجدول الزمني":
+        m = {"col1": "الربع", "col2": "الحالة بالنسبة للجدول الزمني", "col3": "أخر تصفية", "col4": "أخر مستخلص", "comment": "ملاحظات الجدول"}
+    elif sec_name == "أقساط الجهاز":
+        m = {"col1": "اخر قسط تم دفعه", "col2": "القسط التالي", "comment": "ملاحظات الأقساط"}
+    else:
+        m = {"col1": f"إنجاز {sec_name}", "col2": f"معوقات {sec_name}", "col3": f"حالة {sec_name}", "comment": f"ملاحظات {sec_name}"}
+    
+    # اختيار الأعمدة وتسميتها
+    subset = df[["project_id", "المشروع", "الموقع", "col1", "col2", "col3", "comment", "action_note"]].copy()
+    subset = subset.rename(columns={
+        "col1": m.get("col1", "بيان 1"),
+        "col2": m.get("col2", "بيان 2"),
+        "col3": m.get("col3", "بيان 3"),
+        "comment": m.get("comment", "ملاحظات"),
+        "action_note": f"توجيه {sec_name}"
+    })
+    return subset
+
 # --- 2. نظام تسجيل الدخول ---
 if "auth" not in st.session_state:
     st.session_state.auth = False
@@ -79,8 +101,8 @@ else:
         full_df = add_location_column(full_df)
         
         if not full_df.empty:
-            if 'updated_at' in full_df.columns:
-                full_df['updated_at'] = pd.to_datetime(full_df['updated_at'])
+            full_df['updated_at'] = pd.to_datetime(full_df['updated_at'])
+            full_df["المشروع"] = full_df["projects"].apply(lambda x: x["name"] if x else "غير معروف")
             
             tabs = st.tabs(all_sections + ["📋 التقرير المجمع الشامل"])
             
@@ -90,12 +112,9 @@ else:
                     if not sec_data.empty:
                         last_update = sec_data['updated_at'].max()
                         formatted_time = last_update.strftime('%Y-%m-%d | %I:%M %p') if pd.notnull(last_update) else "لم يتم التحديث بعد"
-                        st.markdown(f"### 📑 بيانات قسم {sec_name}")
                         st.info(f"🕒 **آخر تحديث لهذا القسم:** {formatted_time}")
                         
-                        sec_data["المشروع"] = sec_data["projects"].apply(lambda x: x["name"])
-                        
-                        # خرائط المسميات لكل قسم
+                        # مسميات الأعمدة للأدمن (نفس منطقك الأصلي)
                         if sec_name == "الحسابات":
                             map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}
                             cols = ["المشروع", "الموقع", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم", "توجيه الإدارة"]
@@ -120,41 +139,40 @@ else:
                             }, 
                             hide_index=True, use_container_width=True, key=f"adm_ed_{sec_name}"
                         )
-                        
+                        # زر الحفظ (نفس منطقك الأصلي)
                         if st.button(f"💾 حفظ توجيهات {sec_name}", key=f"btn_{sec_name}"):
-                            updates = []
-                            for idx in range(len(edited_adm)):
-                                updates.append({
-                                    "id": int(sec_data.iloc[idx]["id"]),
-                                    "action_note": str(edited_adm.iloc[idx].get("توجيه الإدارة", ""))
-                                })
-                            try:
-                                supabase.table("project_data").upsert(updates).execute()
-                                st.success(f"✅ تم حفظ التوجيهات")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"خطأ في الحفظ: {e}")
+                            updates = [{"id": int(sec_data.iloc[idx]["id"]), "action_note": str(edited_adm.iloc[idx].get("توجيه الإدارة", ""))} for idx in range(len(edited_adm))]
+                            supabase.table("project_data").upsert(updates).execute()
+                            st.rerun()
 
-            # --- تبويب التقرير المجمع الشامل ---
+            # --- تبويب التقرير المجمع الشامل (المعدل) ---
             with tabs[-1]:
-                st.subheader("📋 التقرير المجمع لكافة الأقسام")
-                if not full_df.empty:
-                    # تحويل البيانات لعرضها بشكل منظم
-                    summary_df = full_df.copy()
-                    summary_df["المشروع"] = summary_df["projects"].apply(lambda x: x["name"])
-                    
-                    # عرض الأعمدة الأساسية فقط في التقرير المجمع لتجنب التشتت
-                    cols_to_show = ["المشروع", "الموقع", "section_name", "col1", "col2", "col3", "comment", "action_note", "updated_at"]
-                    final_summary = summary_df[cols_to_show].rename(columns={
-                        "section_name": "القسم",
-                        "col1": "البيان 1",
-                        "col2": "البيان 2",
-                        "col3": "البيان 3",
-                        "comment": "ملاحظات القسم",
-                        "action_note": "توجيه الإدارة",
-                        "updated_at": "تاريخ التحديث"
-                    })
-                    st.dataframe(final_summary, use_container_width=True, hide_index=True)
+                st.subheader("📋 تقرير المتابعة الشامل (كافة الأقسام)")
+                
+                # تجميع البيانات بشكل عرضي (كل الأقسام لكل مشروع)
+                projects_list = full_df[["project_id", "المشروع", "الموقع"]].drop_duplicates().sort_values("project_id")
+                
+                final_combined = projects_list.copy()
+                
+                for s_name in all_sections:
+                    sec_subset = full_df[full_df["section_name"] == s_name]
+                    if not sec_subset.empty:
+                        mapped = get_mapped_df(sec_subset, s_name)
+                        # حذف المشروع والموقع من الفرعي لتجنب التكرار عند الدمج
+                        mapped = mapped.drop(columns=["المشروع", "الموقع"])
+                        final_combined = pd.merge(final_combined, mapped, on="project_id", how="left")
+                
+                # عرض التقرير مع تثبيت أول عمودين
+                st.data_editor(
+                    final_combined.drop(columns=["project_id"]),
+                    column_config={
+                        "المشروع": st.column_config.TextColumn(pinned=True),
+                        "الموقع": st.column_config.TextColumn(pinned=True),
+                    },
+                    disabled=True, # للعرض فقط
+                    hide_index=True,
+                    use_container_width=False # للسماح بالتمرير الأفقي
+                )
 
     # --- ب. واجهة الأقسام (الموظفين) ---
     else:
@@ -188,16 +206,12 @@ else:
                     "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
                     "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
                     "🚩 توجيه الإدارة": st.column_config.TextColumn(disabled=True, width="large"),
-                    "الحالة بالنسبة للجدول الزمني": st.column_config.SelectboxColumn(
-                        "الحالة بالنسبة للجدول الزمني", 
-                        options=TIME_STATUS_OPTIONS,
-                        required=True
-                    ) if sec == "الجدول الزمني" else None,
+                    "الحالة بالنسبة للجدول الزمني": st.column_config.SelectboxColumn("الوضعية", options=TIME_STATUS_OPTIONS) if sec == "الجدول الزمني" else None
                 }, 
                 hide_index=True, use_container_width=True, key="staff_editor"
             )
 
-            if st.button("🚀 حفظ البيانات", type="primary", use_container_width=True):
+            if st.button("🚀 حفظ البيانات"):
                 updates = []
                 now = datetime.now().isoformat()
                 for idx in range(len(edited_staff)):
@@ -212,11 +226,8 @@ else:
                         "comment": str(row.get(map_dict.get("comment", ""), "")),
                         "updated_at": now
                     })
-                try:
-                    supabase.table("project_data").upsert(updates).execute()
-                    st.success("✅ تم الحفظ بنجاح"); st.rerun()
-                except Exception as e:
-                    st.error(f"خطأ: {e}")
+                supabase.table("project_data").upsert(updates).execute()
+                st.success("✅ تم الحفظ"); st.rerun()
 
     if st.sidebar.button("🚪 تسجيل الخروج"):
         st.session_state.auth = False
