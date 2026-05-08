@@ -157,14 +157,16 @@ else:
             
             if st.button("🚀 حفظ كافة التعديلات", type="primary", use_container_width=True):
                 updates, now = [], datetime.now().isoformat()
-                # دالة مساعدة لتجنب أخطاء القيم الفارغة
                 def clean(val): return str(val) if pd.notnull(val) and str(val).strip() != "" else ""
 
                 try:
                     for idx in range(len(edited_df)):
                         row = edited_df.iloc[idx]
+                        # الإجراء التصحيحي: إضافة section_name و project_id بشكل صريح في كل صف
                         updates.append({
                             "id": int(db_df.iloc[idx]["id"]),
+                            "section_name": sec, # التأكد من إرسال اسم القسم
+                            "project_id": int(db_df.iloc[idx]["project_id"]), # التأكد من إرسال معرف المشروع
                             "col1": clean(row.get(m_dict.get("col1"), "")),
                             "col2": clean(row.get(m_dict.get("col2"), "")),
                             "col3": clean(row.get(m_dict.get("col3"), "")),
