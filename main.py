@@ -95,7 +95,7 @@ else:
                 with tabs[i]:
                     sec_data = full_df[full_df["section_name"] == sec_name].copy().sort_values("project_id")
                     if not sec_data.empty:
-                        st.info(f"🕒 آخر تحديث: {sec_data['updated_at'].max().strftime('%Y-%m-%d | %I:%M %p')}")
+                        st.info(f"🕒 آخر تحديث لهذا القسم: {sec_data['updated_at'].max().strftime('%Y-%m-%d | %I:%M %p')}")
                         if sec_name == "الحسابات": m_dict, cols = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم", "توجيه الإدارة"]
                         elif sec_name == "الجدول الزمني": m_dict, cols = {"col1": "الربع", "col2": "الحالة بالنسبة للجدول الزمني", "col3": "أخر تصفية", "col4": "أخر مستخلص", "comment": "ملاحظات", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "الربع", "الحالة بالنسبة للجدول الزمني", "أخر تصفية", "أخر مستخلص", "ملاحظات", "توجيه الإدارة"]
                         elif sec_name == "أقساط الجهاز": m_dict, cols = {"col1": "اخر قسط تم دفعه", "col2": "القسط التالي", "comment": "ملاحظات", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "اخر قسط تم دفعه", "القسط التالي", "ملاحظات", "توجيه الإدارة"]
@@ -121,13 +121,12 @@ else:
             db_df = add_location_column(pd.DataFrame(res.data))
             db_df["المشروع"] = db_df["projects"].apply(lambda x: x["name"])
             
-            # تحديد المسميات الصحيحة للإدخال بناءً على القسم
             if sec == "الحسابات": m_dict, cols = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم"]
             elif sec == "الجدول الزمني": m_dict, cols = {"col1": "الربع", "col2": "الحالة بالنسبة للجدول الزمني", "col3": "أخر تصفية", "col4": "أخر مستخلص", "comment": "ملاحظات", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "الربع", "الحالة بالنسبة للجدول الزمني", "أخر تصفية", "أخر مستخلص", "ملاحظات"]
             elif sec == "أقساط الجهاز": m_dict, cols = {"col1": "اخر قسط تم دفعه", "col2": "القسط التالي", "comment": "ملاحظات", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "اخر قسط تم دفعه", "القسط التالي", "ملاحظات"]
             else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
 
-            edited_df = st.data_editor(db_df.rename(columns=m_dict)[cols], column_config={"المشروع": st.column_config.TextColumn(disabled=True, pinned=True), "الموقع": st.column_config.TextColumn(disabled=True, pinned=True), "🚩 توجيه الإدارة": st.column_config.TextColumn(disabled=True), "الحالة بالنسبة للجدول الزمني": st.column_config.SelectboxColumn("الحالة", options=TIME_STATUS_OPTIONS)}, hide_index=True, use_container_width=True)
+            edited_df = st.data_editor(db_df.rename(columns=m_dict)[cols], column_config={"المشروع": st.column_config.TextColumn(disabled=True, pinned=True), "الموقع": st.column_config.TextColumn(disabled=True, pinned=True), "🚩 توجيه الإدارة": st.column_config.TextColumn(disabled=True), "الحالة بالنسبة للجدول الزمني": st.column_config.SelectboxColumn("الحالة بالنسبة للجدول الزمني", options=TIME_STATUS_OPTIONS)}, hide_index=True, use_container_width=True)
             
             if st.button("🚀 حفظ التعديلات", type="primary", use_container_width=True):
                 updates, now = [], datetime.now().isoformat()
@@ -135,7 +134,7 @@ else:
                     row = edited_df.iloc[idx]
                     updates.append({"id": int(db_df.iloc[idx]["id"]), "col1": str(row.get(m_dict.get("col1"), "")), "col2": str(row.get(m_dict.get("col2"), "")), "col3": str(row.get(m_dict.get("col3"), "")), "col4": str(row.get(m_dict.get("col4"), "")), "col5": str(row.get(m_dict.get("col5"), "")), "comment": str(row.get(m_dict.get("comment"), "")), "updated_at": now})
                 supabase.table("project_data").upsert(updates).execute()
-                st.success("✅ تم الحفظ بنجاح"); st.rerun()
+                st.success("✅ تم حفظ البيانات بنجاح وتحديث تاريخ التحديث للمدير."); st.rerun()
 
     if st.sidebar.button("🚪 تسجيل الخروج"):
         st.session_state.auth = False
