@@ -22,7 +22,7 @@ def get_data_fresh():
         st.error(f"خطأ في جلب البيانات: {e}")
         return pd.DataFrame()
 
-# قائمة المواقع بالترتيب من اتحاد 1 إلى اتحاد 38
+# قائمة المواقع الثابتة (اتحاد 1 - اتحاد 38)
 PROJECT_LOCATIONS = [
     "الشروق", "الشروق", "العبور", "القاهرة الجديدة (بيت الوطن)", "النرجس الجديدة", 
     "بدر", "العاشر", "العاشر", "شمال الرحاب", "شمال الرحاب", "النرجس الجديدة", 
@@ -36,11 +36,11 @@ PROJECT_LOCATIONS = [
 ]
 
 def add_location_column(df):
-    if not df.empty:
+    if not df.empty and 'project_id' in df.columns:
         df['الموقع'] = df['project_id'].apply(lambda x: PROJECT_LOCATIONS[int(x)-1] if 0 < int(x) <= len(PROJECT_LOCATIONS) else "غير محدد")
     return df
 
-# --- 2. إدارة الجلسة ---
+# --- 2. إدارة الجلسة والدخول ---
 if "auth" not in st.session_state:
     st.session_state.auth = False
     st.session_state.role = None
@@ -54,9 +54,15 @@ if not st.session_state.auth:
         submit = st.form_submit_button("دخول")
         if submit:
             passwords = {
-                "Admin38": "admin", "Exec123": "التنفيذ", "Tech123": "المكتب الفني",
-                "Lic123": "التراخيص", "Acc123": "الحسابات", "Legal123": "الشئون القانونية", 
-                "Install123": "أقساط الجهاز", "Cust123": "خدمة العملاء", "Time123": "الجدول الزمني"
+                "Admin38": "admin", 
+                "Exec123": "التنفيذ", 
+                "Time123": "الجدول الزمني", # مضاف هنا بعد التنفيذ مباشرة
+                "Tech123": "المكتب الفني",
+                "Lic123": "التراخيص", 
+                "Acc123": "الحسابات", 
+                "Legal123": "الشئون القانونية", 
+                "Install123": "أقساط الجهاز", 
+                "Cust123": "خدمة العملاء"
             }
             if pwd in passwords:
                 st.session_state.auth = True
@@ -68,7 +74,9 @@ if not st.session_state.auth:
                 st.error("❌ كلمة المرور غير صحيحة")
 else:
     st.set_page_config(page_title="نظام المبادرة", layout="wide")
-    all_sections = ["التنفيذ", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز", "خدمة العملاء", "الجدول الزمني"]
+    
+    # ترتيب الأقسام: الجدول الزمني يظهر بعد التنفيذ مباشرة
+    all_sections = ["التنفيذ", "الجدول الزمني", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز", "خدمة العملاء"]
 
     # --- أ. واجهة المدير العام ---
     if st.session_state.role == "admin":
@@ -91,6 +99,7 @@ else:
                         
                         sec_data["المشروع"] = sec_data["projects"].apply(lambda x: x["name"])
                         
+                        # تنسيق الأعمدة حسب القسم
                         if sec_name == "الحسابات":
                             map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}
                             cols = ["المشروع", "الموقع", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم", "توجيه الإدارة"]
@@ -114,31 +123,23 @@ else:
                         )
                         
                         if st.button(f"💾 حفظ توجيهات {sec_name}", key=f"btn_save_{sec_name}", type="primary"):
-                            updates = [{"id": int(sec_data.iloc[idx]["id"]), "section_name": sec_name, "action_note": str(edited_adm.iloc[idx].get("توجيه الإدارة", ""))} for idx in range(len(edited_adm))]
+                            updates = []
+                            for idx in range(len(edited_adm)):
+                                updates.append({
+                                    "id": int(sec_data.iloc[idx]["id"]),
+                                    "action_note": str(edited_adm.iloc[idx].get("توجيه الإدارة", ""))
+                                })
                             try:
                                 supabase.table("project_data").upsert(updates).execute()
-                                st.success(f"✅ تم حفظ التوجيهات بنجاح")
+                                st.success(f"✅ تم حفظ توجيهات {sec_name}")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"خطأ في الحفظ: {e}")
 
             with tabs[-1]:
-                st.subheader("📋 التقرير المجمع التفصيلي")
-                p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
-                summary_rows = []
-                for p in p_names:
-                    p_loc = full_df[full_df["projects"].apply(lambda x: x["name"]) == p]["الموقع"].iloc[0]
-                    row = {"المشروع": p, "الموقع": p_loc}
-                    for s in all_sections:
-                        sub = full_df[(full_df["projects"].apply(lambda x: x["name"]) == p) & (full_df["section_name"] == s)]
-                        if not sub.empty:
-                            target = sub.iloc[0]
-                            row[f"{s}: ملاحظات"] = target["comment"]
-                            row[f"{s}: توجيه"] = target["action_note"]
-                    summary_rows.append(row)
-                
-                final_summary_df = pd.DataFrame(summary_rows)
-                st.dataframe(final_summary_df, hide_index=True, use_container_width=True, column_config={"المشروع": st.column_config.TextColumn(pinned=True), "الموقع": st.column_config.TextColumn(pinned=True)})
+                st.subheader("📋 التقرير المجمع الشامل")
+                st.info("هذا الجدول يعرض البيانات الخام لكافة الأقسام لغرض المراجعة السريعة.")
+                st.dataframe(full_df, use_container_width=True, hide_index=True)
 
     # --- ب. واجهة الأقسام ---
     else:
@@ -163,43 +164,38 @@ else:
 
             display_df = db_df.rename(columns=map_dict)[cols]
             
-            # إعدادات الأعمدة الخاصة بالجدول الزمني
-            time_options = ["متوافق", "متأخر", "متقدم"]
-            
             edited_staff = st.data_editor(
                 display_df, 
                 column_config={
                     "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
                     "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
                     "🚩 توجيه الإدارة": st.column_config.TextColumn(disabled=True, width="large"),
-                    "الجدول الزمني": st.column_config.SelectboxColumn("الجدول الزمني", options=time_options) if sec == "الجدول الزمني" else st.column_config.TextColumn(),
+                    "الجدول الزمني": st.column_config.SelectboxColumn("الجدول الزمني", options=["متوافق", "متأخر", "متقدم"]) if sec == "الجدول الزمني" else None,
                     "حالة المشروع": st.column_config.SelectboxColumn("حالة المشروع", options=["🟢 مكتمل", "🔵 قيد التنفيذ", "🟠 بانتظار مستندات", "🔴 متوقف"]) if sec not in ["الحسابات", "الجدول الزمني"] else None
                 }, 
                 hide_index=True, use_container_width=True, key="staff_editor"
             )
 
-            if st.button("🚀 حفظ التغييرات", type="primary", use_container_width=True):
+            if st.button("🚀 حفظ البيانات", type="primary", use_container_width=True):
                 updates = []
                 now = datetime.now().isoformat()
                 for idx in range(len(edited_staff)):
                     row = edited_staff.iloc[idx]
-                    payload = {
-                        "id": int(db_df.iloc[idx]["id"]), 
-                        "section_name": sec, 
-                        "col1": str(row.get(map_dict["col1"], "")), 
-                        "col2": str(row.get(map_dict["col2"], "")), 
-                        "col3": str(row.get(map_dict["col3"], "")), 
+                    updates.append({
+                        "id": int(db_df.iloc[idx]["id"]),
+                        "col1": str(row.get(map_dict.get("col1", ""), "")),
+                        "col2": str(row.get(map_dict.get("col2", ""), "")),
+                        "col3": str(row.get(map_dict.get("col3", ""), "")),
                         "col4": str(row.get(map_dict.get("col4", ""), "")),
                         "col5": str(row.get(map_dict.get("col5", ""), "")),
-                        "comment": str(row.get(map_dict["comment"], "")), 
+                        "comment": str(row.get(map_dict.get("comment", ""), "")),
                         "updated_at": now
-                    }
-                    updates.append(payload)
+                    })
                 try:
                     supabase.table("project_data").upsert(updates).execute()
-                    st.balloons(); st.success("✅ تم الحفظ بنجاح!"); st.rerun()
+                    st.success("✅ تم حفظ البيانات بنجاح"); st.rerun()
                 except Exception as e:
-                    st.error(f"خطأ: {e}")
+                    st.error(f"خطأ في الحفظ: {e}")
 
     if st.sidebar.button("🚪 تسجيل الخروج"):
         st.session_state.auth = False
