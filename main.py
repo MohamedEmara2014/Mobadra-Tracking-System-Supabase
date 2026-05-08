@@ -22,7 +22,7 @@ def get_data_fresh():
         st.error(f"خطأ في جلب البيانات: {e}")
         return pd.DataFrame()
 
-# قائمة المواقع بالترتيب الدقيق من اتحاد 1 إلى اتحاد 38
+# قائمة المواقع بالترتيب من اتحاد 1 إلى اتحاد 38
 PROJECT_LOCATIONS = [
     "الشروق", "الشروق", "العبور", "القاهرة الجديدة (بيت الوطن)", "النرجس الجديدة", 
     "بدر", "العاشر", "العاشر", "شمال الرحاب", "شمال الرحاب", "النرجس الجديدة", 
@@ -37,7 +37,6 @@ PROJECT_LOCATIONS = [
 
 def add_location_column(df):
     if not df.empty:
-        # ربط الموقع بناءً على معرف المشروع
         df['الموقع'] = df['project_id'].apply(lambda x: PROJECT_LOCATIONS[int(x)-1] if 0 < int(x) <= len(PROJECT_LOCATIONS) else "غير محدد")
     return df
 
@@ -93,30 +92,31 @@ else:
                         sec_data["المشروع"] = sec_data["projects"].apply(lambda x: x["name"])
                         
                         if sec_name == "الحسابات":
-                            map_dict = {"col1": "الوارد", "col2": "الصادر", "col3": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "توجيه المدير"}
-                            cols = ["المشروع", "الموقع", "الوارد", "الصادر", "الرصيد المتاح", "ملاحظات القسم", "توجيه المدير"]
+                            map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}
+                            cols = ["المشروع", "الموقع", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم", "توجيه الإدارة"]
                         else:
-                            map_dict = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "توجيه المدير"}
-                            cols = ["المشروع", "الموقع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه المدير"]
+                            map_dict = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}
+                            cols = ["المشروع", "الموقع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه الإدارة"]
                         
                         display_df = sec_data.rename(columns=map_dict)[cols]
                         
-                        # تثبيت المشروع والموقع للمدير في الأقسام
                         edited_adm = st.data_editor(
                             display_df, 
                             column_config={
                                 "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
                                 "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
-                                "توجيه المدير": st.column_config.TextColumn("📝 إضافة توجيه", width="large"),
-                                "ما تم انجازه": st.column_config.TextColumn(width="large"),
-                                "المعوقات والمشاكل": st.column_config.TextColumn(width="large"),
+                                "توجيه الإدارة": st.column_config.TextColumn("📝 إضافة توجيه", width="large"),
+                                "وارد العملاء": st.column_config.TextColumn(width="medium"),
+                                "صادر العملاء": st.column_config.TextColumn(width="medium"),
+                                "وارد التنفيذ": st.column_config.TextColumn(width="medium"),
+                                "صادر التنفيذ": st.column_config.TextColumn(width="medium"),
                                 "ملاحظات القسم": st.column_config.TextColumn(width="large")
                             }, 
                             hide_index=True, use_container_width=True, key=f"adm_ed_{sec_name}"
                         )
                         
                         if st.button(f"💾 حفظ توجيهات {sec_name}", key=f"btn_save_{sec_name}", type="primary"):
-                            updates = [{"id": int(sec_data.iloc[idx]["id"]), "section_name": sec_name, "action_note": str(edited_adm.iloc[idx].get("توجيه المدير", ""))} for idx in range(len(edited_adm))]
+                            updates = [{"id": int(sec_data.iloc[idx]["id"]), "section_name": sec_name, "action_note": str(edited_adm.iloc[idx].get("توجيه الإدارة", ""))} for idx in range(len(edited_adm))]
                             try:
                                 supabase.table("project_data").upsert(updates).execute()
                                 st.success(f"✅ تم حفظ توجيهات قسم {sec_name} بنجاح")
@@ -125,7 +125,7 @@ else:
                                 st.error(f"خطأ في الحفظ: {e}")
 
             with tabs[-1]:
-                st.subheader("📋 التقرير المجمع التفصيلي (كافة البيانات)")
+                st.subheader("📋 التقرير المجمع التفصيلي")
                 p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
                 summary_rows = []
                 for p in p_names:
@@ -136,25 +136,17 @@ else:
                         if not sub.empty:
                             target = sub.iloc[0]
                             if s == "الحسابات":
-                                row[f"{s}: الوارد"] = target["col1"]; row[f"{s}: الصادر"] = target["col2"]
-                                row[f"{s}: الرصيد المتاح"] = target["col3"]
+                                row[f"{s}: وارد عملاء"] = target["col1"]; row[f"{s}: صادر عملاء"] = target["col2"]
+                                row[f"{s}: وارد تنفيذ"] = target["col3"]; row[f"{s}: صادر تنفيذ"] = target["col4"]
+                                row[f"{s}: الرصيد"] = target["col5"]
                             else:
-                                row[f"{s}: ما تم إنجازه"] = target["col1"]; row[f"{s}: المعوقات"] = target["col2"]
-                                row[f"{s}: الحالة"] = target["col3"]
-                            row[f"{s}: ملاحظات القسم"] = target["comment"]; row[f"{s}: توجيه المدير"] = target["action_note"]
+                                row[f"{s}: إنجاز"] = target["col1"]; row[f"{s}: معوقات"] = target["col2"]
+                                row[f"{s}: حالة"] = target["col3"]
+                            row[f"{s}: ملاحظات"] = target["comment"]; row[f"{s}: توجيه"] = target["action_note"]
                     summary_rows.append(row)
                 
                 final_summary_df = pd.DataFrame(summary_rows)
-                # تثبيت الأعمدة في التقرير المجمع الشامل
-                st.dataframe(
-                    final_summary_df, 
-                    hide_index=True, 
-                    use_container_width=True, 
-                    column_config={
-                        "المشروع": st.column_config.TextColumn(pinned=True),
-                        "الموقع": st.column_config.TextColumn(pinned=True)
-                    }
-                )
+                st.dataframe(final_summary_df, hide_index=True, use_container_width=True, column_config={"المشروع": st.column_config.TextColumn(pinned=True), "الموقع": st.column_config.TextColumn(pinned=True)})
                 
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
@@ -165,7 +157,7 @@ else:
                     for col_num, value in enumerate(final_summary_df.columns.values):
                         worksheet.set_column(col_num, col_num, 30, wrap_format)
 
-                st.download_button(label="📥 تحميل التقرير المجمع الشامل (Excel)", data=buffer.getvalue(), file_name=f"التقرير_المجمع_الشامل_{datetime.now().strftime('%d-%m-%Y')}.xlsx", mime="application/vnd.ms-excel", type="primary")
+                st.download_button(label="📥 تحميل التقرير المجمع (Excel)", data=buffer.getvalue(), file_name=f"تقرير_مجمع_{datetime.now().strftime('%d-%m-%Y')}.xlsx", mime="application/vnd.ms-excel", type="primary")
 
     # --- ب. واجهة الأقسام ---
     else:
@@ -182,7 +174,7 @@ else:
             with col_exp1:
                 template_df = db_df[["id", "المشروع", "الموقع"]].copy()
                 if sec == "الحسابات":
-                    template_df["الوارد"] = ""; template_df["الصادر"] = ""; template_df["الرصيد المتاح"] = ""; template_df["ملاحظات القسم"] = ""
+                    template_df["وارد العملاء"] = ""; template_df["صادر العملاء"] = ""; template_df["وارد التنفيذ"] = ""; template_df["صادر التنفيذ"] = ""; template_df["الرصيد المتاح"] = ""; template_df["ملاحظات القسم"] = ""
                 else:
                     template_df["ما تم انجازه"] = ""; template_df["المعوقات والمشاكل"] = ""; template_df["حالة المشروع"] = ""; template_df["ملاحظات القسم"] = ""
                 
@@ -194,65 +186,63 @@ else:
                     wrap_format = workbook.add_format({'text_wrap': True, 'valign': 'top'})
                     worksheet.set_column(1, 10, 35, wrap_format)
 
-                st.download_button("📥 تحميل نموذج الإكسيل لملئه", data=tmp_buffer.getvalue(), file_name=f"نموذج_{sec}.xlsx", mime="application/vnd.ms-excel")
+                st.download_button("📥 تحميل نموذج الإكسيل", data=tmp_buffer.getvalue(), file_name=f"نموذج_{sec}.xlsx", mime="application/vnd.ms-excel")
 
             with col_exp2:
-                uploaded_file = st.file_uploader("📂 رفع الملف بعد ملئه لتحديث الجدول", type=["xlsx"])
+                uploaded_file = st.file_uploader("📂 رفع ملف الإكسيل المحدث", type=["xlsx"])
                 if uploaded_file:
                     try:
                         up_df = pd.read_excel(uploaded_file).fillna('')
-                        st.success("✅ تم قراءة الملف بنجاح، يرجى مراجعة الجدول أدناه ثم الضغط على حفظ.")
                         for index, row in up_df.iterrows():
                             idx_list = db_df.index[db_df['id'] == row['id']].tolist()
                             if idx_list:
                                 i = idx_list[0]
                                 if sec == "الحسابات":
-                                    db_df.at[i, "col1"] = str(row.get("الوارد", "")); db_df.at[i, "col2"] = str(row.get("الصادر", ""))
-                                    db_df.at[i, "col3"] = str(row.get("الرصيد المتاح", ""))
+                                    db_df.at[i, "col1"] = str(row.get("وارد العملاء", "")); db_df.at[i, "col2"] = str(row.get("صادر العملاء", ""))
+                                    db_df.at[i, "col3"] = str(row.get("وارد التنفيذ", "")); db_df.at[i, "col4"] = str(row.get("صادر التنفيذ", ""))
+                                    db_df.at[i, "col5"] = str(row.get("الرصيد المتاح", ""))
                                 else:
                                     db_df.at[i, "col1"] = str(row.get("ما تم انجازه", "")); db_df.at[i, "col2"] = str(row.get("المعوقات والمشاكل", ""))
                                     db_df.at[i, "col3"] = str(row.get("حالة المشروع", ""))
                                 db_df.at[i, "comment"] = str(row.get("ملاحظات القسم", ""))
+                        st.success("✅ تم تحديث البيانات من الملف.")
                     except Exception as e:
-                        st.error(f"خطأ في معالجة الملف: {e}")
+                        st.error(f"خطأ في الملف: {e}")
 
             if sec == "الحسابات":
-                map_dict = {"col1": "الوارد", "col2": "الصادر", "col3": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه المدير"}
-                cols = ["المشروع", "الموقع", "🚩 توجيه المدير", "الوارد", "الصادر", "الرصيد المتاح", "ملاحظات القسم"]
+                map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}
+                cols = ["المشروع", "الموقع", "🚩 توجيه الإدارة", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم"]
             else:
-                map_dict = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه المدير"}
-                cols = ["المشروع", "الموقع", "🚩 توجيه المدير", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
+                map_dict = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}
+                cols = ["المشروع", "الموقع", "🚩 توجيه الإدارة", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
 
             display_df = db_df.rename(columns=map_dict)[cols]
             status_options = ["🟢 مكتمل", "🔵 قيد التنفيذ", "🟠 بانتظار مستندات", "🔴 متوقف / معلق"]
             
-            # تثبيت المشروع والموقع في واجهة الأقسام
             edited_staff = st.data_editor(
                 display_df, 
                 column_config={
                     "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
                     "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
-                    "🚩 توجيه المدير": st.column_config.TextColumn(disabled=True, width="large"), 
-                    "ما تم انجازه": st.column_config.TextColumn(width="large"),
-                    "المعوقات والمشاكل": st.column_config.TextColumn(width="large"),
-                    "ملاحظات القسم": st.column_config.TextColumn(width="large"),
+                    "🚩 توجيه الإدارة": st.column_config.TextColumn(disabled=True, width="large"), 
                     "حالة المشروع": st.column_config.SelectboxColumn("حالة المشروع", options=status_options) if sec != "الحسابات" else None
                 }, 
                 hide_index=True, use_container_width=True, key="staff_editor"
             )
 
-            if st.button("🚀 حفظ البيانات النهائية", type="primary", use_container_width=True):
+            if st.button("🚀 حفظ التغييرات", type="primary", use_container_width=True):
                 updates = []
                 now = datetime.now().isoformat()
                 for idx in range(len(edited_staff)):
                     row = edited_staff.iloc[idx]
                     payload = {"id": int(db_df.iloc[idx]["id"]), "section_name": sec, "col1": str(row.get(map_dict["col1"], "")), "col2": str(row.get(map_dict["col2"], "")), "col3": str(row.get(map_dict["col3"], "")), "comment": str(row.get(map_dict["comment"], "")), "updated_at": now}
+                    if sec == "الحسابات": payload.update({"col4": str(row.get("صادر التنفيذ", "")), "col5": str(row.get("الرصيد المتاح", ""))})
                     updates.append(payload)
                 try:
                     supabase.table("project_data").upsert(updates).execute()
-                    st.balloons(); st.success(f"✅ تم حفظ بيانات قسم {sec} بنجاح!"); st.rerun()
+                    st.balloons(); st.success("✅ تم الحفظ بنجاح!"); st.rerun()
                 except Exception as e:
-                    st.error(f"خطأ في الحفظ: {e}")
+                    st.error(f"خطأ: {e}")
 
     if st.sidebar.button("🚪 تسجيل الخروج"):
         st.session_state.auth = False
