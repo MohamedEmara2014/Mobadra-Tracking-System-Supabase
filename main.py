@@ -22,6 +22,25 @@ def get_data_fresh():
         st.error(f"خطأ في جلب البيانات: {e}")
         return pd.DataFrame()
 
+# قائمة المواقع بالترتيب الدقيق من اتحاد 1 إلى اتحاد 38
+PROJECT_LOCATIONS = [
+    "الشروق", "الشروق", "العبور", "القاهرة الجديدة (بيت الوطن)", "النرجس الجديدة", 
+    "بدر", "العاشر", "العاشر", "شمال الرحاب", "شمال الرحاب", "النرجس الجديدة", 
+    "النورس هاوس", "شمال الرحاب", "القاهرة الجديدة (بيت الوطن)", "العاشر", 
+    "العبور الجديدة", "شمال الرحاب", "النورس هاوس", "النرجس الجديدة", 
+    "القاهرة الجديدة (بيت الوطن)", "العاشر", "هليوبوليس الجديدة", "الزقازيق", 
+    "الزقازيق", "هليوبوليس الجديدة", "الأوركيد", "الزقازيق", "العاشر", 
+    "شمال الرحاب", "القاهرة الجديدة (بيت الوطن)", "العاشر", "العبور الجديدة", 
+    "العبور الجديدة", "الزقازيق", "هليوبوليس الجديدة", "الزقازيق", 
+    "هليوبوليس الجديدة", "هليوبوليس الجديدة"
+]
+
+def add_location_column(df):
+    if not df.empty:
+        # ربط الموقع بناءً على معرف المشروع
+        df['الموقع'] = df['project_id'].apply(lambda x: PROJECT_LOCATIONS[int(x)-1] if 0 < int(x) <= len(PROJECT_LOCATIONS) else "غير محدد")
+    return df
+
 # --- 2. إدارة الجلسة ---
 if "auth" not in st.session_state:
     st.session_state.auth = False
@@ -56,6 +75,7 @@ else:
     if st.session_state.role == "admin":
         st.title("📊 لوحة تحكم المدير العام")
         full_df = get_data_fresh()
+        full_df = add_location_column(full_df)
         
         if not full_df.empty:
             if 'updated_at' in full_df.columns:
@@ -74,17 +94,19 @@ else:
                         
                         if sec_name == "الحسابات":
                             map_dict = {"col1": "الوارد", "col2": "الصادر", "col3": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "توجيه المدير"}
-                            cols = ["المشروع", "الوارد", "الصادر", "الرصيد المتاح", "ملاحظات القسم", "توجيه المدير"]
+                            cols = ["المشروع", "الموقع", "الوارد", "الصادر", "الرصيد المتاح", "ملاحظات القسم", "توجيه المدير"]
                         else:
                             map_dict = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "توجيه المدير"}
-                            cols = ["المشروع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه المدير"]
+                            cols = ["المشروع", "الموقع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه المدير"]
                         
                         display_df = sec_data.rename(columns=map_dict)[cols]
                         
+                        # تثبيت المشروع والموقع للمدير في الأقسام
                         edited_adm = st.data_editor(
                             display_df, 
                             column_config={
-                                "المشروع": st.column_config.TextColumn(disabled=True, pinned=True), # تثبيت العمود
+                                "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
+                                "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
                                 "توجيه المدير": st.column_config.TextColumn("📝 إضافة توجيه", width="large"),
                                 "ما تم انجازه": st.column_config.TextColumn(width="large"),
                                 "المعوقات والمشاكل": st.column_config.TextColumn(width="large"),
@@ -107,7 +129,8 @@ else:
                 p_names = sorted(full_df["projects"].apply(lambda x: x["name"]).unique(), key=lambda x: int(x.split()[1]) if " " in x else 0)
                 summary_rows = []
                 for p in p_names:
-                    row = {"المشروع": p}
+                    p_loc = full_df[full_df["projects"].apply(lambda x: x["name"]) == p]["الموقع"].iloc[0]
+                    row = {"المشروع": p, "الموقع": p_loc}
                     for s in all_sections:
                         sub = full_df[(full_df["projects"].apply(lambda x: x["name"]) == p) & (full_df["section_name"] == s)]
                         if not sub.empty:
@@ -122,8 +145,16 @@ else:
                     summary_rows.append(row)
                 
                 final_summary_df = pd.DataFrame(summary_rows)
-                # استخدام dataframe مع تثبيت العمود الأول للمدير في العرض المجمع
-                st.dataframe(final_summary_df, hide_index=True, use_container_width=True, column_config={"المشروع": st.column_config.TextColumn(pinned=True)})
+                # تثبيت الأعمدة في التقرير المجمع الشامل
+                st.dataframe(
+                    final_summary_df, 
+                    hide_index=True, 
+                    use_container_width=True, 
+                    column_config={
+                        "المشروع": st.column_config.TextColumn(pinned=True),
+                        "الموقع": st.column_config.TextColumn(pinned=True)
+                    }
+                )
                 
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
@@ -144,11 +175,12 @@ else:
         
         if res.data:
             db_df = pd.DataFrame(res.data)
+            db_df = add_location_column(db_df)
             db_df["المشروع"] = db_df["projects"].apply(lambda x: x["name"])
             
             col_exp1, col_exp2 = st.columns(2)
             with col_exp1:
-                template_df = db_df[["id", "المشروع"]].copy()
+                template_df = db_df[["id", "المشروع", "الموقع"]].copy()
                 if sec == "الحسابات":
                     template_df["الوارد"] = ""; template_df["الصادر"] = ""; template_df["الرصيد المتاح"] = ""; template_df["ملاحظات القسم"] = ""
                 else:
@@ -186,18 +218,20 @@ else:
 
             if sec == "الحسابات":
                 map_dict = {"col1": "الوارد", "col2": "الصادر", "col3": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه المدير"}
-                cols = ["المشروع", "🚩 توجيه المدير", "الوارد", "الصادر", "الرصيد المتاح", "ملاحظات القسم"]
+                cols = ["المشروع", "الموقع", "🚩 توجيه المدير", "الوارد", "الصادر", "الرصيد المتاح", "ملاحظات القسم"]
             else:
                 map_dict = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه المدير"}
-                cols = ["المشروع", "🚩 توجيه المدير", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
+                cols = ["المشروع", "الموقع", "🚩 توجيه المدير", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
 
             display_df = db_df.rename(columns=map_dict)[cols]
             status_options = ["🟢 مكتمل", "🔵 قيد التنفيذ", "🟠 بانتظار مستندات", "🔴 متوقف / معلق"]
             
+            # تثبيت المشروع والموقع في واجهة الأقسام
             edited_staff = st.data_editor(
                 display_df, 
                 column_config={
-                    "المشروع": st.column_config.TextColumn(disabled=True, pinned=True), # تثبيت العمود
+                    "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
+                    "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
                     "🚩 توجيه المدير": st.column_config.TextColumn(disabled=True, width="large"), 
                     "ما تم انجازه": st.column_config.TextColumn(width="large"),
                     "المعوقات والمشاكل": st.column_config.TextColumn(width="large"),
