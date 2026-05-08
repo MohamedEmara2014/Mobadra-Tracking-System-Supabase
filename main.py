@@ -71,7 +71,7 @@ else:
     st.set_page_config(page_title="نظام المبادرة", layout="wide")
     all_sections = ["التنفيذ", "الجدول الزمني", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز", "خدمة العملاء"]
 
-    # خيارات الحالة مع الرموز
+    # خيارات الحالة الزمنية
     TIME_STATUS_OPTIONS = ["✅ متوافق", "🚀 متقدم", "⚠️ متأخر"]
 
     # --- أ. واجهة المدير العام ---
@@ -81,13 +81,25 @@ else:
         full_df = add_location_column(full_df)
         
         if not full_df.empty:
+            # معالجة عمود التوقيت ليظهر بشكل مقروء
+            if 'updated_at' in full_df.columns:
+                full_df['updated_at'] = pd.to_datetime(full_df['updated_at'])
+            
             tabs = st.tabs(all_sections + ["📋 التقرير المجمع"])
             for i, sec_name in enumerate(all_sections):
                 with tabs[i]:
                     sec_data = full_df[full_df["section_name"] == sec_name].copy().sort_values("project_id")
                     if not sec_data.empty:
+                        # استخراج آخر توقيت تحديث للقسم الحالي
+                        last_update = sec_data['updated_at'].max()
+                        formatted_time = last_update.strftime('%Y-%m-%d | %I:%M %p') if pd.notnull(last_update) else "لم يتم التحديث بعد"
+                        
+                        st.markdown(f"### 📑 بيانات قسم {sec_name}")
+                        st.info(f"🕒 **آخر تحديث لهذا القسم:** {formatted_time}")
+                        
                         sec_data["المشروع"] = sec_data["projects"].apply(lambda x: x["name"])
                         
+                        # تخصيص المسميات
                         if sec_name == "الحسابات":
                             map_dict = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}
                             cols = ["المشروع", "الموقع", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم", "توجيه الإدارة"]
@@ -100,21 +112,30 @@ else:
                         
                         display_df = sec_data.rename(columns=map_dict)[cols]
                         
-                        st.data_editor(
+                        edited_adm = st.data_editor(
                             display_df, 
                             column_config={
                                 "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
                                 "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
-                                "الحالة بالنسبة للجدول الزمني": st.column_config.TextColumn(disabled=True),
                                 "توجيه الإدارة": st.column_config.TextColumn("📝 إضافة توجيه", width="large")
                             }, 
                             hide_index=True, use_container_width=True, key=f"adm_ed_{sec_name}"
                         )
                         if st.button(f"💾 حفظ توجيهات {sec_name}", key=f"btn_{sec_name}"):
-                            # منطق الحفظ...
-                            pass
+                            updates = []
+                            for idx in range(len(edited_adm)):
+                                updates.append({
+                                    "id": int(sec_data.iloc[idx]["id"]),
+                                    "action_note": str(edited_adm.iloc[idx].get("توجيه الإدارة", ""))
+                                })
+                            try:
+                                supabase.table("project_data").upsert(updates).execute()
+                                st.success(f"✅ تم حفظ توجيهات قسم {sec_name}")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"خطأ في الحفظ: {e}")
 
-    # --- ب. واجهة الأقسام (الموظفين) ---
+    # --- ب. واجهة الأقسام ---
     else:
         sec = st.session_state.user_section
         st.title(f"🏗️ إدارة بيانات قسم: {sec}")
@@ -169,7 +190,7 @@ else:
                     })
                 try:
                     supabase.table("project_data").upsert(updates).execute()
-                    st.success("✅ تم التحديث بنجاح"); st.rerun()
+                    st.success("✅ تم الحفظ بنجاح"); st.rerun()
                 except Exception as e:
                     st.error(f"خطأ: {e}")
 
