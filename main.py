@@ -84,7 +84,6 @@ else:
     sec_emojis = {"التنفيذ": "🏗️", "الجدول الزمني": "📅", "المكتب الفني": "📐", "التراخيص": "📜", "الحسابات": "💰", "الشئون القانونية": "⚖️", "أقساط الجهاز": "📠", "خدمة العملاء": "🤝"}
     TIME_STATUS_OPTIONS = ["✅ متوافق", "🚀 متقدم", "⚠️ متأخر"]
 
-    # --- أ. واجهة المدير العام ---
     if st.session_state.role == "admin":
         st.title("📊 لوحة تحكم المدير العام")
         full_df = add_location_column(get_data_fresh())
@@ -115,7 +114,6 @@ else:
                         combined_final = pd.merge(combined_final, mapped.rename(columns=new_cols), on="project_id", how="left")
                 st.data_editor(combined_final.drop(columns=["project_id"]), column_config={"المشروع": st.column_config.TextColumn(pinned=True), "الموقع": st.column_config.TextColumn(pinned=True)}, disabled=True, hide_index=True)
 
-    # --- ب. واجهة الأقسام (الموظفين) مع خاصية الرفع والتحميل ---
     else:
         sec = st.session_state.user_section
         st.title(f"{sec_emojis.get(sec, '🏗️')} إدارة بيانات قسم: {sec}")
@@ -125,16 +123,13 @@ else:
             db_df = add_location_column(pd.DataFrame(res.data))
             db_df["المشروع"] = db_df["projects"].apply(lambda x: x["name"])
             
-            # تحديد مسميات الأعمدة
             if sec == "الحسابات": m_dict, cols = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم"]
             elif sec == "الجدول الزمني": m_dict, cols = {"col1": "الربع", "col2": "الحالة بالنسبة للجدول الزمني", "col3": "أخر تصفية", "col4": "أخر مستخلص", "comment": "ملاحظات", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "الربع", "الحالة بالنسبة للجدول الزمني", "أخر تصفية", "أخر مستخلص", "ملاحظات"]
             elif sec == "أقساط الجهاز": m_dict, cols = {"col1": "اخر قسط تم دفعه", "col2": "القسط التالي", "comment": "ملاحظات", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "اخر قسط تم دفعه", "القسط التالي", "ملاحظات"]
             else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
 
-            # --- أدوات Excel ---
             col_ex1, col_ex2 = st.columns(2)
             with col_ex1:
-                # تحميل النموذج
                 template_df = db_df.rename(columns=m_dict)[cols]
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -142,14 +137,12 @@ else:
                 st.download_button(label="📥 تحميل نموذج Excel لتعبئته", data=output.getvalue(), file_name=f"نموذج_{sec}.xlsx", mime="application/vnd.ms-excel")
             
             with col_ex2:
-                # رفع الملف
-                uploaded_file = st.file_uploader("📤 رفع ملف Excel المكتمل لتحديث البيانات", type=["xlsx"])
+                uploaded_file = st.file_uploader("📤 رفع ملف Excel لتحديث البيانات", type=["xlsx"])
+                up_df = None
                 if uploaded_file:
-                    up_df = pd.read_excel(uploaded_file)
-                    st.success("تم قراءة الملف بنجاح، يمكنك مراجعة البيانات في الجدول أدناه قبل الحفظ.")
+                    up_df = pd.read_excel(uploaded_file).fillna("")
 
-            # عرض الجدول للإدخال اليدوي أو المراجعة
-            display_df = up_df if uploaded_file is not None else db_df.rename(columns=m_dict)[cols]
+            display_df = up_df if up_df is not None else db_df.rename(columns=m_dict)[cols]
             
             edited_df = st.data_editor(
                 display_df, 
@@ -164,22 +157,29 @@ else:
             
             if st.button("🚀 حفظ كافة التعديلات", type="primary", use_container_width=True):
                 updates, now = [], datetime.now().isoformat()
-                # عكس قاموس التسميات للوصول لأسماء الأعمدة في القاعدة
-                inv_m = {v: k for k, v in m_dict.items()}
-                for idx in range(len(edited_df)):
-                    row = edited_df.iloc[idx]
-                    updates.append({
-                        "id": int(db_df.iloc[idx]["id"]),
-                        "col1": str(row.get(m_dict.get("col1"), "")),
-                        "col2": str(row.get(m_dict.get("col2"), "")),
-                        "col3": str(row.get(m_dict.get("col3"), "")),
-                        "col4": str(row.get(m_dict.get("col4"), "")),
-                        "col5": str(row.get(m_dict.get("col5"), "")),
-                        "comment": str(row.get(m_dict.get("comment"), "")),
-                        "updated_at": now
-                    })
-                supabase.table("project_data").upsert(updates).execute()
-                st.success("✅ تم حفظ وتحديث كافة البيانات."); st.rerun()
+                # دالة مساعدة لتجنب أخطاء القيم الفارغة
+                def clean(val): return str(val) if pd.notnull(val) and str(val).strip() != "" else ""
+
+                try:
+                    for idx in range(len(edited_df)):
+                        row = edited_df.iloc[idx]
+                        updates.append({
+                            "id": int(db_df.iloc[idx]["id"]),
+                            "col1": clean(row.get(m_dict.get("col1"), "")),
+                            "col2": clean(row.get(m_dict.get("col2"), "")),
+                            "col3": clean(row.get(m_dict.get("col3"), "")),
+                            "col4": clean(row.get(m_dict.get("col4"), "")),
+                            "col5": clean(row.get(m_dict.get("col5"), "")),
+                            "comment": clean(row.get(m_dict.get("comment"), "")),
+                            "updated_at": now
+                        })
+                    
+                    if updates:
+                        supabase.table("project_data").upsert(updates).execute()
+                        st.success("✅ تم حفظ وتحديث كافة البيانات بنجاح.")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"❌ حدث خطأ أثناء الحفظ: {e}")
 
     if st.sidebar.button("🚪 تسجيل الخروج"):
         st.session_state.auth = False
