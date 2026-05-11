@@ -3,6 +3,7 @@ import pandas as pd
 from supabase import create_client
 import io
 from datetime import datetime
+import time
 
 # --- 1. إعدادات الاتصال وقاعدة البيانات ---
 SUPABASE_URL = "https://rsyyhhpjnzkgnhzuekij.supabase.co"
@@ -112,6 +113,17 @@ else:
                         mapped = get_mapped_df_for_summary(sec_subset, s_name)
                         new_cols = {c: f"{sec_emojis.get(s_name, '')} {c}" for c in mapped.columns if c != "project_id"}
                         combined_final = pd.merge(combined_final, mapped.rename(columns=new_cols), on="project_id", how="left")
+                
+                # إضافة زر تحميل التقرير المجمع للمدير
+                st.subheader("📋 التقرير المجمع لكافة الأقسام")
+                
+                col_down1, col_down2 = st.columns([1, 3])
+                with col_down1:
+                    output_all = io.BytesIO()
+                    with pd.ExcelWriter(output_all, engine='xlsxwriter') as writer:
+                        combined_final.drop(columns=["project_id"]).to_excel(writer, index=False, sheet_name='التقرير الشامل')
+                    st.download_button(label="📥 تحميل التقرير المجمع (Excel)", data=output_all.getvalue(), file_name=f"التقرير_المجمع_{datetime.now().strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.ms-excel")
+                
                 st.data_editor(combined_final.drop(columns=["project_id"]), column_config={"المشروع": st.column_config.TextColumn(pinned=True), "الموقع": st.column_config.TextColumn(pinned=True)}, disabled=True, hide_index=True)
 
     else:
@@ -162,7 +174,6 @@ else:
                 try:
                     for idx in range(len(edited_df)):
                         row = edited_df.iloc[idx]
-                        # تعيين البيانات مع ضمان وجود الأعمدة الإلزامية
                         updates.append({
                             "id": int(db_df.iloc[idx]["id"]),
                             "section_name": str(sec),
@@ -179,8 +190,6 @@ else:
                     if updates:
                         supabase.table("project_data").upsert(updates).execute()
                         st.success("✅ تم حفظ وتحديث كافة البيانات بنجاح.")
-                        # تأخير بسيط ليرى المستخدم الرسالة قبل إعادة التحميل
-                        import time
                         time.sleep(1.5)
                         st.rerun()
                 except Exception as e:
