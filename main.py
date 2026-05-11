@@ -40,6 +40,10 @@ LEGAL_CHECKS = ["✅ تم لجميع الأعضاء", "⚠️ تم لبعض ال
 LEGAL_POWERS = ["✅ تم لجميع الأعضاء", "⚠️ تم لبعض الأعضاء", "❌ لم يسلم أحد"]
 LEGAL_CONTRACTS = ["✅ تم لجميع الأعضاء", "⚠️ تم لبعض الأعضاء", "❌ لم يوقع أحد"]
 
+# خيارات المكتب الفني الجديدة
+TECH_OFFICE_STATUS = ["🔴 لم تبدأ", "🟡 جاري العمل", "🟢 تم الإنتهاء"]
+TECH_SCHEDULE_STATUS = ["✅ تم العرض على المجموعة", "❌ لم يتم العرض على المجموعة"]
+
 def add_location_column(df):
     if not df.empty and 'project_id' in df.columns:
         df['الموقع'] = df['project_id'].apply(
@@ -56,6 +60,8 @@ def get_mapped_df_for_summary(df, sec_name):
         m = {"col1": "اخر قسط تم دفعه", "col2": "القسط التالي", "comment": "ملاحظات الأقساط"}
     elif sec_name == "الشئون القانونية":
         m = {"col1": "تسليم الشيكات", "col2": "التوكيلات", "col3": "العقود", "comment": "ملاحظات قانونية"}
+    elif sec_name == "المكتب الفني":
+        m = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الجدول الزمني", "comment": "ملاحظات المكتب الفني"}
     else:
         m = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": f"ملاحظات {sec_name}"}
     
@@ -109,6 +115,7 @@ else:
                         elif sec_name == "الجدول الزمني": m_dict, cols = {"col1": "الربع", "col2": "الحالة بالنسبة للجدول الزمني", "col3": "أخر تصفية", "col4": "أخر مستخلص", "comment": "ملاحظات", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "الربع", "الحالة بالنسبة للجدول الزمني", "أخر تصفية", "أخر مستخلص", "ملاحظات", "توجيه الإدارة"]
                         elif sec_name == "أقساط الجهاز": m_dict, cols = {"col1": "اخر قسط تم دفعه", "col2": "القسط التالي", "comment": "ملاحظات", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "اخر قسط تم دفعه", "القسط التالي", "ملاحظات", "توجيه الإدارة"]
                         elif sec_name == "الشئون القانونية": m_dict, cols = {"col1": "تسليم الشيكات", "col2": "التوكيلات", "col3": "العقود", "comment": "ملاحظات قانونية", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "تسليم الشيكات", "التوكيلات", "العقود", "ملاحظات قانونية", "توجيه الإدارة"]
+                        elif sec_name == "المكتب الفني": m_dict, cols = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الجدول الزمني", "comment": "ملاحظات المكتب الفني", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "الرسومات المعمارية", "الرسومات الإنشائية", "المعمارية التنفيذية", "الإنشائية التنفيذية", "الجدول الزمني", "ملاحظات المكتب الفني", "توجيه الإدارة"]
                         else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه الإدارة"]
                         st.data_editor(sec_data.rename(columns=m_dict)[cols], column_config={"المشروع": st.column_config.TextColumn(disabled=True, pinned=True), "الموقع": st.column_config.TextColumn(disabled=True, pinned=True)}, hide_index=True, use_container_width=True, key=f"adm_{sec_name}")
 
@@ -143,6 +150,7 @@ else:
             elif sec == "الجدول الزمني": m_dict, cols = {"col1": "الربع", "col2": "الحالة بالنسبة للجدول الزمني", "col3": "أخر تصفية", "col4": "أخر مستخلص", "comment": "ملاحظات", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "الربع", "الحالة بالنسبة للجدول الزمني", "أخر تصفية", "أخر مستخلص", "ملاحظات"]
             elif sec == "أقساط الجهاز": m_dict, cols = {"col1": "اخر قسط تم دفعه", "col2": "القسط التالي", "comment": "ملاحظات", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "اخر قسط تم دفعه", "القسط التالي", "ملاحظات"]
             elif sec == "الشئون القانونية": m_dict, cols = {"col1": "تسليم الشيكات", "col2": "التوكيلات", "col3": "العقود", "comment": "ملاحظات قانونية", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "تسليم الشيكات", "التوكيلات", "العقود", "ملاحظات قانونية"]
+            elif sec == "المكتب الفني": m_dict, cols = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الالجدول الزمني", "comment": "ملاحظات المكتب الفني", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "الرسومات المعمارية", "الرسومات الإنشائية", "المعمارية التنفيذية", "الإنشائية التنفيذية", "الالجدول الزمني", "ملاحظات المكتب الفني"]
             else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
 
             col_ex1, col_ex2 = st.columns(2)
@@ -161,7 +169,7 @@ else:
 
             display_df = up_df if up_df is not None else db_df.rename(columns=m_dict)[cols]
             
-            # إعدادات الأعمدة الخاصة بالشئون القانونية
+            # إعدادات الأعمدة المتقدمة
             col_configs = {
                 "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
                 "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
@@ -172,6 +180,14 @@ else:
                     "تسليم الشيكات": st.column_config.SelectboxColumn("تسليم الشيكات", options=LEGAL_CHECKS, required=True),
                     "التوكيلات": st.column_config.SelectboxColumn("التوكيلات", options=LEGAL_POWERS, required=True),
                     "العقود": st.column_config.SelectboxColumn("العقود", options=LEGAL_CONTRACTS, required=True),
+                })
+            elif sec == "المكتب الفني":
+                col_configs.update({
+                    "الرسومات المعمارية": st.column_config.SelectboxColumn("الرسومات المعمارية", options=TECH_OFFICE_STATUS, required=True),
+                    "الرسومات الإنشائية": st.column_config.SelectboxColumn("الرسومات الإنشائية", options=TECH_OFFICE_STATUS, required=True),
+                    "المعمارية التنفيذية": st.column_config.SelectboxColumn("المعمارية التنفيذية", options=TECH_OFFICE_STATUS, required=True),
+                    "الإنشائية التنفيذية": st.column_config.SelectboxColumn("الإنشائية التنفيذية", options=TECH_OFFICE_STATUS, required=True),
+                    "الالجدول الزمني": st.column_config.SelectboxColumn("الجدول الزمني", options=TECH_SCHEDULE_STATUS, required=True),
                 })
             elif sec == "الجدول الزمني":
                 col_configs["الحالة بالنسبة للجدول الزمني"] = st.column_config.SelectboxColumn("الحالة بالنسبة للجدول الزمني", options=TIME_STATUS_OPTIONS)
