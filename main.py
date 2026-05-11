@@ -35,6 +35,11 @@ PROJECT_LOCATIONS = [
     "هليوبوليس الجديدة", "هليوبوليس الجديدة"
 ]
 
+# خيارات الشئون القانونية
+LEGAL_CHECKS = ["✅ تم لجميع الأعضاء", "⚠️ تم لبعض الأعضاء", "❌ لم يسلم أحد"]
+LEGAL_POWERS = ["✅ تم لجميع الأعضاء", "⚠️ تم لبعض الأعضاء", "❌ لم يسلم أحد"]
+LEGAL_CONTRACTS = ["✅ تم لجميع الأعضاء", "⚠️ تم لبعض الأعضاء", "❌ لم يوقع أحد"]
+
 def add_location_column(df):
     if not df.empty and 'project_id' in df.columns:
         df['الموقع'] = df['project_id'].apply(
@@ -85,12 +90,7 @@ else:
     st.set_page_config(page_title="نظام المبادرة", layout="wide")
     all_sections = ["التنفيذ", "الجدول الزمني", "المكتب الفني", "التراخيص", "الحسابات", "الشئون القانونية", "أقساط الجهاز", "خدمة العملاء"]
     sec_emojis = {"التنفيذ": "🏗️", "الجدول الزمني": "📅", "المكتب الفني": "📐", "التراخيص": "📜", "الحسابات": "💰", "الشئون القانونية": "⚖️", "أقساط الجهاز": "📠", "خدمة العملاء": "🤝"}
-    
-    # خيارات القوائم المنسدلة
     TIME_STATUS_OPTIONS = ["✅ متوافق", "🚀 متقدم", "⚠️ متأخر"]
-    LEGAL_SHIKAT_OPTIONS = ["تم لجميع الأعضاء", "تم لبعض الأعضاء", "لم يسلم أحد"]
-    LEGAL_TOKEEL_OPTIONS = ["تم لجميع الأعضاء", "تم لبعض الأعضاء", "لم يسلم أحد"]
-    LEGAL_AQOD_OPTIONS = ["تم لجميع الأعضاء", "تم لبعض الأعضاء", "لم يوقع أحد"]
 
     if st.session_state.role == "admin":
         st.title("📊 لوحة تحكم المدير العام")
@@ -108,7 +108,7 @@ else:
                         if sec_name == "الحسابات": m_dict, cols = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم", "توجيه الإدارة"]
                         elif sec_name == "الجدول الزمني": m_dict, cols = {"col1": "الربع", "col2": "الحالة بالنسبة للجدول الزمني", "col3": "أخر تصفية", "col4": "أخر مستخلص", "comment": "ملاحظات", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "الربع", "الحالة بالنسبة للجدول الزمني", "أخر تصفية", "أخر مستخلص", "ملاحظات", "توجيه الإدارة"]
                         elif sec_name == "أقساط الجهاز": m_dict, cols = {"col1": "اخر قسط تم دفعه", "col2": "القسط التالي", "comment": "ملاحظات", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "اخر قسط تم دفعه", "القسط التالي", "ملاحظات", "توجيه الإدارة"]
-                        elif sec_name == "الشئون القانونية": m_dict, cols = {"col1": "تسليم الشيكات", "col2": "التوكيلات", "col3": "العقود", "comment": "ملاحظات", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "تسليم الشيكات", "التوكيلات", "العقود", "ملاحظات", "توجيه الإدارة"]
+                        elif sec_name == "الشئون القانونية": m_dict, cols = {"col1": "تسليم الشيكات", "col2": "التوكيلات", "col3": "العقود", "comment": "ملاحظات قانونية", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "تسليم الشيكات", "التوكيلات", "العقود", "ملاحظات قانونية", "توجيه الإدارة"]
                         else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه الإدارة"]
                         st.data_editor(sec_data.rename(columns=m_dict)[cols], column_config={"المشروع": st.column_config.TextColumn(disabled=True, pinned=True), "الموقع": st.column_config.TextColumn(disabled=True, pinned=True)}, hide_index=True, use_container_width=True, key=f"adm_{sec_name}")
 
@@ -125,8 +125,8 @@ else:
                 st.subheader("📋 التقرير المجمع لكافة الأقسام")
                 output_all = io.BytesIO()
                 with pd.ExcelWriter(output_all, engine='xlsxwriter') as writer:
-                    combined_final.drop(columns=["project_id"]).to_excel(writer, index=False)
-                st.download_button(label="📥 تحميل التقرير المجمع (Excel)", data=output_all.getvalue(), file_name=f"التقرير_المجمع_{datetime.now().strftime('%Y-%m-%d')}.xlsx")
+                    combined_final.drop(columns=["project_id"]).to_excel(writer, index=False, sheet_name='التقرير الشامل')
+                st.download_button(label="📥 تحميل التقرير المجمع (Excel)", data=output_all.getvalue(), file_name=f"التقرير_المجمع_{datetime.now().strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.ms-excel")
                 
                 st.data_editor(combined_final.drop(columns=["project_id"]), column_config={"المشروع": st.column_config.TextColumn(pinned=True), "الموقع": st.column_config.TextColumn(pinned=True)}, disabled=True, hide_index=True)
 
@@ -142,7 +142,7 @@ else:
             if sec == "الحسابات": m_dict, cols = {"col1": "وارد العملاء", "col2": "صادر العملاء", "col3": "وارد التنفيذ", "col4": "صادر التنفيذ", "col5": "الرصيد المتاح", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "وارد العملاء", "صادر العملاء", "وارد التنفيذ", "صادر التنفيذ", "الرصيد المتاح", "ملاحظات القسم"]
             elif sec == "الجدول الزمني": m_dict, cols = {"col1": "الربع", "col2": "الحالة بالنسبة للجدول الزمني", "col3": "أخر تصفية", "col4": "أخر مستخلص", "comment": "ملاحظات", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "الربع", "الحالة بالنسبة للجدول الزمني", "أخر تصفية", "أخر مستخلص", "ملاحظات"]
             elif sec == "أقساط الجهاز": m_dict, cols = {"col1": "اخر قسط تم دفعه", "col2": "القسط التالي", "comment": "ملاحظات", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "اخر قسط تم دفعه", "القسط التالي", "ملاحظات"]
-            elif sec == "الشئون القانونية": m_dict, cols = {"col1": "تسليم الشيكات", "col2": "التوكيلات", "col3": "العقود", "comment": "ملاحظات", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "تسليم الشيكات", "التوكيلات", "العقود", "ملاحظات"]
+            elif sec == "الشئون القانونية": m_dict, cols = {"col1": "تسليم الشيكات", "col2": "التوكيلات", "col3": "العقود", "comment": "ملاحظات قانونية", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "تسليم الشيكات", "التوكيلات", "العقود", "ملاحظات قانونية"]
             else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
 
             col_ex1, col_ex2 = st.columns(2)
@@ -150,28 +150,33 @@ else:
                 template_df = db_df.rename(columns=m_dict)[cols]
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    template_df.to_excel(writer, index=False)
-                st.download_button(label="📥 تحميل نموذج Excel", data=output.getvalue(), file_name=f"نموذج_{sec}.xlsx")
+                    template_df.to_excel(writer, index=False, sheet_name='Sheet1')
+                st.download_button(label="📥 تحميل نموذج Excel لتعبئته", data=output.getvalue(), file_name=f"نموذج_{sec}.xlsx", mime="application/vnd.ms-excel")
             
             with col_ex2:
-                uploaded_file = st.file_uploader("📤 رفع ملف Excel", type=["xlsx"])
-                up_df = pd.read_excel(uploaded_file).fillna("") if uploaded_file else None
+                uploaded_file = st.file_uploader("📤 رفع ملف Excel لتحديث البيانات", type=["xlsx"])
+                up_df = None
+                if uploaded_file:
+                    up_df = pd.read_excel(uploaded_file).fillna("")
 
             display_df = up_df if up_df is not None else db_df.rename(columns=m_dict)[cols]
             
-            edited_df = st.data_editor(
-                display_df, 
-                column_config={
-                    "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
-                    "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
-                    "🚩 توجيه الإدارة": st.column_config.TextColumn(disabled=True),
-                    "الحالة بالنسبة للجدول الزمني": st.column_config.SelectboxColumn(options=TIME_STATUS_OPTIONS),
-                    "تسليم الشيكات": st.column_config.SelectboxColumn(options=LEGAL_SHIKAT_OPTIONS),
-                    "التوكيلات": st.column_config.SelectboxColumn(options=LEGAL_TOKEEL_OPTIONS),
-                    "العقود": st.column_config.SelectboxColumn(options=LEGAL_AQOD_OPTIONS)
-                }, 
-                hide_index=True, use_container_width=True
-            )
+            # إعدادات الأعمدة الخاصة بالشئون القانونية
+            col_configs = {
+                "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
+                "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
+                "🚩 توجيه الإدارة": st.column_config.TextColumn(disabled=True),
+            }
+            if sec == "الشئون القانونية":
+                col_configs.update({
+                    "تسليم الشيكات": st.column_config.SelectboxColumn("تسليم الشيكات", options=LEGAL_CHECKS, required=True),
+                    "التوكيلات": st.column_config.SelectboxColumn("التوكيلات", options=LEGAL_POWERS, required=True),
+                    "العقود": st.column_config.SelectboxColumn("العقود", options=LEGAL_CONTRACTS, required=True),
+                })
+            elif sec == "الجدول الزمني":
+                col_configs["الحالة بالنسبة للجدول الزمني"] = st.column_config.SelectboxColumn("الحالة بالنسبة للجدول الزمني", options=TIME_STATUS_OPTIONS)
+
+            edited_df = st.data_editor(display_df, column_config=col_configs, hide_index=True, use_container_width=True)
             
             if st.button("🚀 حفظ كافة التعديلات", type="primary", use_container_width=True):
                 updates, now = [], datetime.now().isoformat()
