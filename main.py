@@ -118,18 +118,26 @@ else:
                         elif sec_name == "المكتب الفني": m_dict, cols = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الجدول الزمني", "comment": "ملاحظات المكتب الفني", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "الرسومات المعمارية", "الرسومات الإنشائية", "المعمارية التنفيذية", "الإنشائية التنفيذية", "الجدول الزمني", "ملاحظات المكتب الفني", "توجيه الإدارة"]
                         else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه الإدارة"]
                         
-                        # تفعيل التعديل مع تمكين تتبع التغييرات لحفظ التوجيهات
                         adm_edited = st.data_editor(sec_data.rename(columns=m_dict)[cols], column_config={"المشروع": st.column_config.TextColumn(disabled=True, pinned=True), "الموقع": st.column_config.TextColumn(disabled=True, pinned=True)}, hide_index=True, use_container_width=True, key=f"adm_edit_{sec_name}")
                         
-                        # زر لحفظ التوجيهات الصادرة من المدير للقسم الحالي
                         if st.button(f"💾 حفظ توجيهات قسم {sec_name}", key=f"btn_save_adm_{sec_name}"):
                             try:
                                 adm_updates = []
                                 for idx in range(len(adm_edited)):
                                     row = adm_edited.iloc[idx]
+                                    # التعديل الحاسم: تم تمرير الأعمده الإلزامية لتجنب خطأ الـ null value constraint
                                     adm_updates.append({
                                         "id": int(sec_data.iloc[idx]["id"]),
-                                        "action_note": str(row.get("توجيه الإدارة", "")) if pd.notnull(row.get("توجيه الإدارة", "")) else ""
+                                        "section_name": str(sec_name),
+                                        "project_id": int(sec_data.iloc[idx]["project_id"]),
+                                        "col1": str(sec_data.iloc[idx].get("col1", "")) if pd.notnull(sec_data.iloc[idx].get("col1", "")) else "",
+                                        "col2": str(sec_data.iloc[idx].get("col2", "")) if pd.notnull(sec_data.iloc[idx].get("col2", "")) else "",
+                                        "col3": str(sec_data.iloc[idx].get("col3", "")) if pd.notnull(sec_data.iloc[idx].get("col3", "")) else "",
+                                        "col4": str(sec_data.iloc[idx].get("col4", "")) if pd.notnull(sec_data.iloc[idx].get("col4", "")) else "",
+                                        "col5": str(sec_data.iloc[idx].get("col5", "")) if pd.notnull(sec_data.iloc[idx].get("col5", "")) else "",
+                                        "comment": str(sec_data.iloc[idx].get("comment", "")) if pd.notnull(sec_data.iloc[idx].get("comment", "")) else "",
+                                        "action_note": str(row.get("توجيه الإدارة", "")) if pd.notnull(row.get("توجيه الإدارة", "")) else "",
+                                        "updated_at": datetime.now().isoformat()
                                     })
                                 if adm_updates:
                                     supabase.table("project_data").upsert(adm_updates).execute()
@@ -173,7 +181,6 @@ else:
             elif sec == "المكتب الفني": m_dict, cols = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الالجدول الزمني", "comment": "ملاحظات المكتب الفني", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "الرسومات المعمارية", "الرسومات الإنشائية", "المعمارية التنفيذية", "الإنشائية التنفيذية", "الالجدول الزمني", "ملاحظات المكتب الفني"]
             else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
 
-            # إبراز "توجيه الإدارة" بلون برتقالي/أصفر مميز وواضح جداً في لوحة رئيس القسم
             st.warning("⚠️ يرجى مراجعة عمود (🚩 توجيه الإدارة) لرؤية آخر التعليمات الصادرة من المدير العام مباشرة للعمل بموجبها.")
 
             col_ex1, col_ex2 = st.columns(2)
@@ -192,7 +199,6 @@ else:
 
             display_df = up_df if up_df is not None else db_df.rename(columns=m_dict)[cols]
             
-            # إعدادات الأعمدة المتقدمة
             col_configs = {
                 "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
                 "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
@@ -234,6 +240,7 @@ else:
                             "col4": clean(row.get(m_dict.get("col4"), "")),
                             "col5": clean(row.get(m_dict.get("col5"), "")),
                             "comment": clean(row.get(m_dict.get("comment"), "")),
+                            "action_note": clean(db_df.iloc[idx].get("action_note", "")), # الحفاظ على توجيه الإدارة الحالي دون مسحه عند حفظ الموظف لبياناته
                             "updated_at": now
                         })
                     
