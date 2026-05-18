@@ -40,7 +40,7 @@ LEGAL_CHECKS = ["✅ تم لجميع الأعضاء", "⚠️ تم لبعض ال
 LEGAL_POWERS = ["✅ تم لجميع الأعضاء", "⚠️ تم لبعض الأعضاء", "❌ لم يسلم أحد"]
 LEGAL_CONTRACTS = ["✅ تم لجميع الأعضاء", "⚠️ تم لبعض الأعضاء", "❌ لم يوقع أحد"]
 
-# خيارات المكتب الفني الجديدة
+# خيارات المكتب الفني
 TECH_OFFICE_STATUS = ["🔴 لم تبدأ", "🟡 جاري العمل", "🟢 تم الإنتهاء"]
 TECH_SCHEDULE_STATUS = ["✅ تم العرض على المجموعة", "❌ لم يتم العرض على المجموعة"]
 
@@ -117,7 +117,27 @@ else:
                         elif sec_name == "الشئون القانونية": m_dict, cols = {"col1": "تسليم الشيكات", "col2": "التوكيلات", "col3": "العقود", "comment": "ملاحظات قانونية", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "تسليم الشيكات", "التوكيلات", "العقود", "ملاحظات قانونية", "توجيه الإدارة"]
                         elif sec_name == "المكتب الفني": m_dict, cols = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الجدول الزمني", "comment": "ملاحظات المكتب الفني", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "الرسومات المعمارية", "الرسومات الإنشائية", "المعمارية التنفيذية", "الإنشائية التنفيذية", "الجدول الزمني", "ملاحظات المكتب الفني", "توجيه الإدارة"]
                         else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه الإدارة"]
-                        st.data_editor(sec_data.rename(columns=m_dict)[cols], column_config={"المشروع": st.column_config.TextColumn(disabled=True, pinned=True), "الموقع": st.column_config.TextColumn(disabled=True, pinned=True)}, hide_index=True, use_container_width=True, key=f"adm_{sec_name}")
+                        
+                        # تفعيل التعديل مع تمكين تتبع التغييرات لحفظ التوجيهات
+                        adm_edited = st.data_editor(sec_data.rename(columns=m_dict)[cols], column_config={"المشروع": st.column_config.TextColumn(disabled=True, pinned=True), "الموقع": st.column_config.TextColumn(disabled=True, pinned=True)}, hide_index=True, use_container_width=True, key=f"adm_edit_{sec_name}")
+                        
+                        # زر لحفظ التوجيهات الصادرة من المدير للقسم الحالي
+                        if st.button(f"💾 حفظ توجيهات قسم {sec_name}", key=f"btn_save_adm_{sec_name}"):
+                            try:
+                                adm_updates = []
+                                for idx in range(len(adm_edited)):
+                                    row = adm_edited.iloc[idx]
+                                    adm_updates.append({
+                                        "id": int(sec_data.iloc[idx]["id"]),
+                                        "action_note": str(row.get("توجيه الإدارة", "")) if pd.notnull(row.get("توجيه الإدارة", "")) else ""
+                                    })
+                                if adm_updates:
+                                    supabase.table("project_data").upsert(adm_updates).execute()
+                                    st.success(f"✅ تم حفظ وإرسال توجيهات قسم {sec_name} بنجاح.")
+                                    time.sleep(1)
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"حدث خطأ أثناء حفظ التوجيهات: {e}")
 
             with tabs[-1]:
                 projects_base = full_df[["project_id", "المشروع", "الموقع"]].drop_duplicates().sort_values("project_id")
@@ -152,6 +172,9 @@ else:
             elif sec == "الشئون القانونية": m_dict, cols = {"col1": "تسليم الشيكات", "col2": "التوكيلات", "col3": "العقود", "comment": "ملاحظات قانونية", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "تسليم الشيكات", "التوكيلات", "العقود", "ملاحظات قانونية"]
             elif sec == "المكتب الفني": m_dict, cols = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الالجدول الزمني", "comment": "ملاحظات المكتب الفني", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "الرسومات المعمارية", "الرسومات الإنشائية", "المعمارية التنفيذية", "الإنشائية التنفيذية", "الالجدول الزمني", "ملاحظات المكتب الفني"]
             else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
+
+            # إبراز "توجيه الإدارة" بلون برتقالي/أصفر مميز وواضح جداً في لوحة رئيس القسم
+            st.warning("⚠️ يرجى مراجعة عمود (🚩 توجيه الإدارة) لرؤية آخر التعليمات الصادرة من المدير العام مباشرة للعمل بموجبها.")
 
             col_ex1, col_ex2 = st.columns(2)
             with col_ex1:
