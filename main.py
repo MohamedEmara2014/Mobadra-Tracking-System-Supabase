@@ -83,7 +83,7 @@ if not st.session_state.auth:
     st.set_page_config(page_title="تسجيل الدخول", layout="centered")
     st.title("🔐 نظام متابعة مشروعات المبادرة")
     with st.form("login_form"):
-        pwd = st.text_input("أدخل كلمة المرور:", type="password")
+        pwd = text_input = st.text_input("أدخل كلمة المرور:", type="password")
         if st.form_submit_button("دخول"):
             passwords = {"Admin38": "admin", "Exec123": "التنفيذ", "Time123": "الجدول الزمني", "Tech123": "المكتب الفني", "Lic123": "التراخيص", "Acc123": "الحسابات", "Legal123": "الشئون القانونية", "Install123": "أقساط الجهاز", "Cust123": "خدمة العملاء"}
             if pwd in passwords:
@@ -118,14 +118,20 @@ else:
                         elif sec_name == "المكتب الفني": m_dict, cols = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الجدول الزمني", "comment": "ملاحظات المكتب الفني", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "الرسومات المعمارية", "الرسومات الإنشائية", "المعمارية التنفيذية", "الإنشائية التنفيذية", "الجدول الزمني", "ملاحظات المكتب الفني", "توجيه الإدارة"]
                         else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه الإدارة"]
                         
-                        adm_edited = st.data_editor(sec_data.rename(columns=m_dict)[cols], column_config={"المشروع": st.column_config.TextColumn(disabled=True, pinned=True), "الموقع": st.column_config.TextColumn(disabled=True, pinned=True)}, hide_index=True, use_container_width=True, key=f"adm_edit_{sec_name}")
+                        # إعدادات العرض للمدير العام لتمكين احتواء النص المتعدد الأسطر
+                        adm_configs = {
+                            "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
+                            "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
+                            "توجيه الإدارة": st.column_config.TextColumn(disabled=False, help="اكتب هنا التوجيه واضغط زر الحفظ بالأسفل", width="large"),
+                        }
+                        
+                        adm_edited = st.data_editor(sec_data.rename(columns=m_dict)[cols], column_config=adm_configs, hide_index=True, use_container_width=True, key=f"adm_edit_{sec_name}")
                         
                         if st.button(f"💾 حفظ توجيهات قسم {sec_name}", key=f"btn_save_adm_{sec_name}"):
                             try:
                                 adm_updates = []
                                 for idx in range(len(adm_edited)):
                                     row = adm_edited.iloc[idx]
-                                    # التعديل الحاسم: تم تمرير الأعمده الإلزامية لتجنب خطأ الـ null value constraint
                                     adm_updates.append({
                                         "id": int(sec_data.iloc[idx]["id"]),
                                         "section_name": str(sec_name),
@@ -163,6 +169,7 @@ else:
                     combined_final.drop(columns=["project_id"]).to_excel(writer, index=False, sheet_name='التقرير الشامل')
                 st.download_button(label="📥 تحميل التقرير المجمع (Excel)", data=output_all.getvalue(), file_name=f"التقرير_المجمع_{datetime.now().strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.ms-excel")
                 
+                # تهيئة عرض التقرير المجمع الشامل ليعرض النصوص ممتدة
                 st.data_editor(combined_final.drop(columns=["project_id"]), column_config={"المشروع": st.column_config.TextColumn(pinned=True), "الموقع": st.column_config.TextColumn(pinned=True)}, disabled=True, hide_index=True)
 
     else:
@@ -181,7 +188,8 @@ else:
             elif sec == "المكتب الفني": m_dict, cols = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الالجدول الزمني", "comment": "ملاحظات المكتب الفني", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "الرسومات المعمارية", "الرسومات الإنشائية", "المعمارية التنفيذية", "الإنشائية التنفيذية", "الالجدول الزمني", "ملاحظات المكتب الفني"]
             else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "🚩 توجيه الإدارة"}, ["المشروع", "الموقع", "🚩 توجيه الإدارة", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
 
-            st.warning("⚠️ يرجى مراجعة عمود (🚩 توجيه الإدارة) لرؤية آخر التعليمات الصادرة من المدير العام مباشرة للعمل بموجبها.")
+            # إبراز توجيهات الإدارة بلون واضح وتنسيق ملفت
+            st.warning("⚠️ تنبيه هام ورسمي: يرجى مراجعة عمود (🚩 توجيه الإدارة) لمعاينة التوجيهات الممتدة كاملة وتنفيذها.")
 
             col_ex1, col_ex2 = st.columns(2)
             with col_ex1:
@@ -199,10 +207,11 @@ else:
 
             display_df = up_df if up_df is not None else db_df.rename(columns=m_dict)[cols]
             
+            # تهيئة عمود توجيه الإدارة ليكون كبيراً وعريضاً ويظهر النصوص على أكثر من سطر تلقائياً
             col_configs = {
                 "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
                 "الموقع": st.column_config.TextColumn(disabled=True, pinned=True),
-                "🚩 توجيه الإدارة": st.column_config.TextColumn(disabled=True),
+                "🚩 توجيه الإدارة": st.column_config.TextColumn(disabled=True, width="large", help="هذا العمود يعرض التعليمات المباشرة من الإدارة العامة بشكل كامل ممتد"),
             }
             if sec == "الشئون القانونية":
                 col_configs.update({
@@ -240,7 +249,7 @@ else:
                             "col4": clean(row.get(m_dict.get("col4"), "")),
                             "col5": clean(row.get(m_dict.get("col5"), "")),
                             "comment": clean(row.get(m_dict.get("comment"), "")),
-                            "action_note": clean(db_df.iloc[idx].get("action_note", "")), # الحفاظ على توجيه الإدارة الحالي دون مسحه عند حفظ الموظف لبياناته
+                            "action_note": clean(db_df.iloc[idx].get("action_note", "")), 
                             "updated_at": now
                         })
                     
