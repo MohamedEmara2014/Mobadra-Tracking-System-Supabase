@@ -186,16 +186,6 @@ else:
             elif sec == "المكتب الفني": m_dict, cols = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الالجدول الزمني", "comment": "ملاحظات المكتب الفني", "action_note": "🚨 توجيه الإدارة"}, ["المشروع", "الموقع", "🚨 توجيه الإدارة", "الرسومات المعمارية", "الرسومات الإنشائية", "المعمارية التنفيذية", "الإنشائية التنفيذية", "الالجدول الزمني", "ملاحظات المكتب الفني"]
             else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "🚨 توجيه الإدارة"}, ["المشروع", "الموقع", "🚨 توجيه الإدارة", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم"]
 
-            st.markdown(
-                """
-                <div style="background-color: #ff4b4b; padding: 15px; border-radius: 10px; text-align: center; border: 2px solid #ffffff; margin-bottom: 20px;">
-                    <h3 style="color: white; margin: 0; font-weight: bold;">🚨 انتباه لجميع رؤساء الأقسام 🚨</h3>
-                    <p style="color: white; font-size: 16px; margin: 5px 0 0 0;">تم تحديث وإبراز عمود <b>(🚩 توجيه الإدارة)</b> أدناه بلون خط داكن وخلفية عريضة ممتدة لرؤية التعليمات الصادرة فوراً.</p>
-                </div>
-                """, 
-                unsafe_allow_html=True
-            )
-
             col_ex1, col_ex2 = st.columns(2)
             with col_ex1:
                 template_df = db_df.rename(columns=m_dict)[cols]
@@ -210,7 +200,17 @@ else:
                 if uploaded_file:
                     up_df = pd.read_excel(uploaded_file).fillna("")
 
-            display_df = up_df if up_df is not None else db_df.rename(columns=m_dict)[cols]
+            # دمج البيانات لضمان بقاء "توجيه الإدارة" الأصلي وعدم تصفيره عند الرفع
+            if up_df is not None:
+                display_df = up_df.copy()
+                # إذا كانت خانة توجيه الإدارة فارغة أو مفقودة في شيت الاكسيل المرفوع، نملأها من قاعدة البيانات الحالية تلقائياً
+                if "🚨 توجيه الإدارة" in display_df.columns:
+                    for idx in range(len(display_df)):
+                        val = str(display_df.iloc[idx]["🚨 توجيه الإدارة"]).strip()
+                        if val == "" or val == "nan":
+                            display_df.iloc[idx, display_df.columns.get_loc("🚨 توجيه الإدارة")] = db_df.iloc[idx].get("action_note", "")
+            else:
+                display_df = db_df.rename(columns=m_dict)[cols]
             
             col_configs = {
                 "المشروع": st.column_config.TextColumn(disabled=True, pinned=True),
@@ -242,17 +242,16 @@ else:
             
             if st.button("🚀 حفظ كافة التعديلات", type="primary", use_container_width=True):
                 updates, now = [], datetime.now().isoformat()
-                def clean(val): return str(val) if pd.notnull(val) and str(val).strip() != "" else ""
+                def clean(val): return str(val) if pd.notnull(val) and str(val).strip() != "" and str(val).strip() != "nan" else ""
 
                 try:
                     for idx in range(len(edited_df)):
                         row = edited_df.iloc[idx]
                         
-                        # التعديل الذكي الذى يمنع اختفاء التوجيه:
-                        # يبحث أولا في الجدول المعدل/المرفوع فإذا وجده فارغاً أو غير موجود يأخذه من قاعدة البيانات مباشرة لضمان عدم الضياع
-                        active_note = row.get("🚨 توجيه الإدارة", "")
+                        # فحص ذكي إضافي قبل الإرسال لقاعدة البيانات لحماية التوجيه من المسح
+                        active_note = clean(row.get("🚨 توجيه الإدارة", ""))
                         if not active_note:
-                            active_note = db_df.iloc[idx].get("action_note", "")
+                            active_note = clean(db_df.iloc[idx].get("action_note", ""))
 
                         updates.append({
                             "id": int(db_df.iloc[idx]["id"]),
@@ -264,7 +263,7 @@ else:
                             "col4": clean(row.get(m_dict.get("col4"), "")),
                             "col5": clean(row.get(m_dict.get("col5"), "")),
                             "comment": clean(row.get(m_dict.get("comment"), "")),
-                            "action_note": clean(active_note), 
+                            "action_note": active_note, 
                             "updated_at": now
                         })
                     
