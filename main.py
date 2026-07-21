@@ -44,6 +44,9 @@ LEGAL_CONTRACTS = ["✅ تم لجميع الأعضاء", "⚠️ تم لبعض �
 TECH_OFFICE_STATUS = ["🔴 لم تبدأ", "🟡 جاري العمل", "🟢 تم الإنتهاء"]
 TECH_SCHEDULE_STATUS = ["✅ تم العرض على المجموعة", "❌ لم يتم العرض على المجموعة"]
 
+# خيارات التراخيص
+EXECUTION_STATUS_OPTIONS = ["🔴 متوقف", "🟡 جاري العمل", "🟢 تم التسليم", "⚠️ به معوقات"]
+
 def add_location_column(df):
     if not df.empty and 'project_id' in df.columns:
         df['الموقع'] = df['project_id'].apply(
@@ -191,6 +194,8 @@ else:
                 })
             elif sec == "الجدول الزمني":
                 col_configs["الحالة بالنسبة للجدول الزمني"] = st.column_config.SelectboxColumn("الحالة بالنسبة للجدول الزمني", options=TIME_STATUS_OPTIONS)
+                elif sec == "التراخيص":
+                col_configs["حالة المشروع"] = st.column_config.SelectboxColumn("حالة المشروع", options=EXECUTION_STATUS_OPTIONS)
 
             edited_df = st.data_editor(display_df, column_config=col_configs, hide_index=True, use_container_width=True)
             
