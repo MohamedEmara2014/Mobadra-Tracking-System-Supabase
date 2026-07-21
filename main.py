@@ -194,7 +194,7 @@ else:
                 })
             elif sec == "الجدول الزمني":
                 col_configs["الحالة بالنسبة للجدول الزمني"] = st.column_config.SelectboxColumn("الحالة بالنسبة للجدول الزمني", options=TIME_STATUS_OPTIONS)
-                elif sec == "التراخيص":
+            elif sec == "التراخيص":
                 col_configs["حالة المشروع"] = st.column_config.SelectboxColumn("حالة المشروع", options=EXECUTION_STATUS_OPTIONS)
 
             edited_df = st.data_editor(display_df, column_config=col_configs, hide_index=True, use_container_width=True)
