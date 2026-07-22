@@ -88,7 +88,7 @@ if not st.session_state.auth:
     with st.form("login_form"):
         pwd = st.text_input("أدخل كلمة المرور:", type="password")
         if st.form_submit_button("دخول"):
-            passwords = {"Admin38": "admin", "Exec123": "التنفيذ", "Time123": "الجدول الزمني", "Tech123": "المكتب الفني", "Lic123": "التراخيص", "Acc123": "الحسابات", "Legal123": "الشئون القانونية", "Install123": "أقساط الجهاز", "Cust123": "خدمة العملاء"}
+            passwords = {"Admin38": "admin", "Exec123": "التنفيذ", "Time123": "الجدول الزمني", "Tech123": "المكتب الفني", "TRL111": "التراخيص", "Acc123": "الحسابات", "Legal123": "الشئون القانونية", "Install123": "أقساط الجهاز", "Cust123": "خدمة العملاء"}
             if pwd in passwords:
                 st.session_state.auth, val = True, passwords[pwd]
                 st.session_state.role = "admin" if val == "admin" else "staff"
