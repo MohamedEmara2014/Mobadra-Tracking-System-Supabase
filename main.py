@@ -66,7 +66,7 @@ def get_mapped_df_for_summary(df, sec_name):
     elif sec_name == "المكتب الفني":
         m = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الجدول الزمني", "comment": "ملاحظات المكتب الفني"}
     else:
-        m = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": f"ملاحظات {sec_name}"}
+        m = {"col1": "ما تم انجازه", "col2": "أخر بند تم عمل مستخلص له", "col3": "حالة المشروع", "comment": f"ملاحظات {sec_name}"}
     
     available_cols = ["project_id"]
     rename_dict = {}
