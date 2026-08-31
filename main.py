@@ -88,11 +88,29 @@ if not st.session_state.auth:
     with st.form("login_form"):
         pwd = st.text_input("أدخل كلمة المرور:", type="password")
         if st.form_submit_button("دخول"):
-            passwords = {"Admin38": "admin", "Exec123": "التنفيذ", "Time123": "الجدول الزمني", "Tech123": "المكتب الفني", "TRL111": "التراخيص", "Acc123": "الحسابات", "Legal123": "الشئون القانونية", "Install123": "أقساط الجهاز", "Cust123": "خدمة العملاء"}
+            passwords = {
+                "Admin38": "admin", 
+                "View123": "viewer",  # كلمة مرور حساب العرض/المشاهد فقط
+                "Exec123": "التنفيذ", 
+                "Time123": "الجدول الزمني", 
+                "Tech123": "المكتب الفني", 
+                "TRL111": "التراخيص", 
+                "Acc123": "الحسابات", 
+                "Legal123": "الشئون القانونية", 
+                "Install123": "أقساط الجهاز", 
+                "Cust123": "خدمة العملاء"
+            }
             if pwd in passwords:
                 st.session_state.auth, val = True, passwords[pwd]
-                st.session_state.role = "admin" if val == "admin" else "staff"
-                st.session_state.user_section = val if val != "admin" else None
+                if val == "admin":
+                    st.session_state.role = "admin"
+                    st.session_state.user_section = None
+                elif val == "viewer":
+                    st.session_state.role = "viewer"
+                    st.session_state.user_section = None
+                else:
+                    st.session_state.role = "staff"
+                    st.session_state.user_section = val
                 st.rerun()
             else: st.error("❌ كلمة المرور غير صحيحة")
 else:
@@ -101,8 +119,16 @@ else:
     sec_emojis = {"التنفيذ": "🏗️", "الجدول الزمني": "📅", "المكتب الفني": "📐", "التراخيص": "📜", "الحسابات": "💰", "الشئون القانونية": "⚖️", "أقساط الجهاز": "📠", "خدمة العملاء": "🤝"}
     TIME_STATUS_OPTIONS = ["✅ متوافق", "🚀 متقدم", "⚠️ متأخر"]
 
-    if st.session_state.role == "admin":
-        st.title("📊 لوحة تحكم المدير العام")
+    # --- لوحة التحكم الخاصة بالمدير العام وحساب المشاهد فقط ---
+    if st.session_state.role in ["admin", "viewer"]:
+        is_viewer = (st.session_state.role == "viewer")
+        
+        if is_viewer:
+            st.title("👁️ لوحة استعراض التقارير والملفات (للعرض فقط)")
+            st.info("ℹ️ أنت مسجّل بحساب مشاهد: يتيح لك الاطلاع على كافة البيانات والتقارير دون إمكانية التعديل أو التنزيل.")
+        else:
+            st.title("📊 لوحة تحكم المدير العام")
+
         full_df = add_location_column(get_data_fresh())
         if not full_df.empty:
             full_df['updated_at'] = pd.to_datetime(full_df['updated_at'])
@@ -120,7 +146,16 @@ else:
                         elif sec_name == "الشئون القانونية": m_dict, cols = {"col1": "تسليم الشيكات", "col2": "التوكيلات", "col3": "العقود", "comment": "ملاحظات قانونية", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "تسليم الشيكات", "التوكيلات", "العقود", "ملاحظات قانونية", "توجيه الإدارة"]
                         elif sec_name == "المكتب الفني": m_dict, cols = {"col1": "الرسومات المعمارية", "col2": "الرسومات الإنشائية", "col3": "المعمارية التنفيذية", "col4": "الإنشائية التنفيذية", "col5": "الجدول الزمني", "comment": "ملاحظات المكتب الفني", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "الرسومات المعمارية", "الرسومات الإنشائية", "المعمارية التنفيذية", "الإنشائية التنفيذية", "الجدول الزمني", "ملاحظات المكتب الفني", "توجيه الإدارة"]
                         else: m_dict, cols = {"col1": "ما تم انجازه", "col2": "المعوقات والمشاكل", "col3": "حالة المشروع", "comment": "ملاحظات القسم", "action_note": "توجيه الإدارة"}, ["المشروع", "الموقع", "ما تم انجازه", "المعوقات والمشاكل", "حالة المشروع", "ملاحظات القسم", "توجيه الإدارة"]
-                        st.data_editor(sec_data.rename(columns=m_dict)[cols], column_config={"المشروع": st.column_config.TextColumn(disabled=True, pinned=True), "الموقع": st.column_config.TextColumn(disabled=True, pinned=True)}, hide_index=True, use_container_width=True, key=f"adm_{sec_name}")
+                        
+                        # إغلاق التعديل نهائياً في حالة المشاهد
+                        st.data_editor(
+                            sec_data.rename(columns=m_dict)[cols], 
+                            column_config={"المشروع": st.column_config.TextColumn(disabled=True, pinned=True), "الموقع": st.column_config.TextColumn(disabled=True, pinned=True)}, 
+                            disabled=is_viewer, 
+                            hide_index=True, 
+                            use_container_width=True, 
+                            key=f"adm_{sec_name}"
+                        )
 
             with tabs[-1]:
                 projects_base = full_df[["project_id", "المشروع", "الموقع"]].drop_duplicates().sort_values("project_id")
@@ -133,13 +168,17 @@ else:
                         combined_final = pd.merge(combined_final, mapped.rename(columns=new_cols), on="project_id", how="left")
                 
                 st.subheader("📋 التقرير المجمع لكافة الأقسام")
-                output_all = io.BytesIO()
-                with pd.ExcelWriter(output_all, engine='xlsxwriter') as writer:
-                    combined_final.drop(columns=["project_id"]).to_excel(writer, index=False, sheet_name='التقرير الشامل')
-                st.download_button(label="📥 تحميل التقرير المجمع (Excel)", data=output_all.getvalue(), file_name=f"التقرير_المجمع_{datetime.now().strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.ms-excel")
+                
+                # منع إظهار زر التنزيل لـ Viewer
+                if not is_viewer:
+                    output_all = io.BytesIO()
+                    with pd.ExcelWriter(output_all, engine='xlsxwriter') as writer:
+                        combined_final.drop(columns=["project_id"]).to_excel(writer, index=False, sheet_name='التقرير الشامل')
+                    st.download_button(label="📥 تحميل التقرير المجمع (Excel)", data=output_all.getvalue(), file_name=f"التقرير_المجمع_{datetime.now().strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.ms-excel")
                 
                 st.data_editor(combined_final.drop(columns=["project_id"]), column_config={"المشروع": st.column_config.TextColumn(pinned=True), "الموقع": st.column_config.TextColumn(pinned=True)}, disabled=True, hide_index=True)
 
+    # --- واجهة الموظفين والأقسام ---
     else:
         sec = st.session_state.user_section
         st.title(f"{sec_emojis.get(sec, '🏗️')} إدارة بيانات قسم: {sec}")
